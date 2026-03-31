@@ -1,0 +1,86 @@
+.transactions-card-premium {
+    height: 100%;
+}
+
+.view-all-link {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--accent-primary);
+    transition: all var(--transition-fast);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+}
+
+.view-all-link:hover {
+    gap: 8px;
+}
+
+.transactions-list-premium {
+    padding: var(--space-md);
+    padding-top: 0;
+}
+
+.transactions-empty {
+    padding: var(--space-xl);
+    text-align: center;
+    color: var(--text-tertiary);
+}
+
+.transaction-row-premium {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    padding: var(--space-md);
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    margin-bottom: 4px;
+    border: 1px solid transparent;
+}
+
+.transaction-row-premium:hover {
+    background: var(--bg-hover);
+    border-color: var(--border-subtle);
+    transform: translateX(4px);
+}
+
+.transaction-icon-premium {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-lg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.transaction-info-premium {
+    flex: 1;
+    min-width: 0;
+}
+
+.transaction-merchant {
+    display: block;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.transaction-time {
+    font-size: 0.8125rem;
+    color: var(--text-tertiary);
+}
+
+.transaction-amount-premium {
+    font-size: 0.9375rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    white-space: nowrap;
+}

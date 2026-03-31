@@ -1,0 +1,170 @@
+/* ========================================
+   Expense Form Modal
+   ======================================== */
+
+.expense-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.expense-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-md);
+}
+
+.expense-form-row.full {
+  grid-template-columns: 1fr;
+}
+
+/* Amount Input with ₹ prefix */
+.amount-input-wrapper {
+  position: relative;
+}
+
+.amount-input-wrapper .input-wrapper input {
+  padding-left: 36px;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.amount-prefix {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-secondary);
+  font-size: 1.125rem;
+  font-weight: 600;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.amount-input-wrapper .input-wrapper.has-value .amount-prefix,
+.amount-input-wrapper .input-wrapper.focused .amount-prefix {
+  color: var(--accent-primary);
+}
+
+/* Date input theme override */
+.expense-form .date-input-wrapper input[type="date"] {
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  font-family: var(--font-body);
+  width: 100%;
+  transition: border-color var(--transition-base), box-shadow var(--transition-base);
+}
+
+.expense-form .date-input-wrapper input[type="date"]:focus {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px rgba(var(--accent-primary-rgb), 0.15);
+}
+
+.expense-form .date-input-wrapper input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.5);
+  cursor: pointer;
+}
+
+[data-theme="light"] .expense-form .date-input-wrapper input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.3);
+}
+
+.date-input-wrapper label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+
+/* Toggle switch */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-sm) 0;
+}
+
+.toggle-row-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+.toggle-row-label svg {
+  color: var(--text-secondary);
+}
+
+.toggle-switch {
+  position: relative;
+  width: 48px;
+  height: 26px;
+  cursor: pointer;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  inset: 0;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-full);
+  transition: background var(--transition-base), border-color var(--transition-base);
+}
+
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  background: var(--text-secondary);
+  border-radius: 50%;
+  transition: transform var(--transition-spring), background var(--transition-base);
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(22px);
+  background: #fff;
+}
+
+/* Tags input */
+.tags-hint {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  margin-top: -8px;
+}
+
+/* Form actions */
+.expense-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-md);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  .expense-form-row {
+    grid-template-columns: 1fr;
+  }
+}

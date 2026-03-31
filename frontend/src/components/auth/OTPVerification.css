@@ -1,0 +1,148 @@
+.otp-verification-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(8px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    padding: 20px;
+}
+
+.otp-verification-card {
+    max-width: 450px;
+    width: 100%;
+    padding: 40px;
+    position: relative;
+    text-align: center;
+}
+
+.otp-back-btn {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    background: transparent;
+    border: none;
+    color: var(--text-muted, #94a3b8);
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 50%;
+    transition: all 0.2s;
+}
+
+.otp-back-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+}
+
+.otp-header {
+    margin-bottom: 30px;
+}
+
+.otp-icon-wrapper {
+    width: 64px;
+    height: 64px;
+    background: rgba(99, 102, 241, 0.1);
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 0 auto 20px;
+    color: #6366f1;
+}
+
+.otp-header h2 {
+    font-size: 24px;
+    margin-bottom: 10px;
+    color: white;
+}
+
+.otp-header p {
+    color: var(--text-muted, #94a3b8);
+    font-size: 15px;
+    line-height: 1.5;
+}
+
+.otp-inputs {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin-bottom: 30px;
+}
+
+.otp-input {
+    width: 50px;
+    height: 60px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    font-size: 24px;
+    font-weight: bold;
+    color: white;
+    text-align: center;
+    transition: all 0.3s;
+}
+
+.otp-input:focus {
+    outline: none;
+    border-color: #6366f1;
+    background: rgba(99, 102, 241, 0.05);
+    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15);
+}
+
+.otp-submit-btn {
+    width: 100%;
+}
+
+.otp-footer {
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.otp-footer p {
+    font-size: 14px;
+    color: var(--text-muted, #94a3b8);
+    margin-bottom: 10px;
+}
+
+.resend-btn {
+    background: transparent;
+    border: none;
+    color: #6366f1;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 auto;
+    transition: all 0.2s;
+    font-size: 15px;
+}
+
+.resend-btn.disabled {
+    color: var(--text-muted, #94a3b8);
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.resend-btn:not(.disabled):hover {
+    text-decoration: underline;
+    opacity: 0.9;
+}
+
+@media (max-width: 480px) {
+    .otp-inputs {
+        gap: 8px;
+    }
+    
+    .otp-input {
+        width: 40px;
+        height: 50px;
+        font-size: 20px;
+    }
+}

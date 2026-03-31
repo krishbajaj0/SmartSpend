@@ -1,0 +1,406 @@
+/* ========================================
+   Expenses Page
+   ======================================== */
+
+/* Page header */
+.expenses-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+  margin-bottom: var(--space-xl);
+}
+
+.expenses-page-header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.expenses-page-header-left h1 {
+  font-size: 1.75rem;
+}
+
+.expenses-count {
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  background: rgba(var(--accent-primary-rgb), 0.12);
+  color: var(--accent-primary);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+/* Filter bar */
+.expenses-filter-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+  padding: var(--space-lg);
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--space-xl);
+  backdrop-filter: blur(12px);
+}
+
+.expenses-filter-bar .dropdown {
+  min-width: 160px;
+}
+
+.expenses-filter-bar .input-wrapper {
+  min-width: 180px;
+  max-width: 260px;
+}
+
+/* Date filter pills */
+.filter-date-pills {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+.filter-pill {
+  padding: 8px 16px;
+  border-radius: var(--radius-full);
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  transition: all var(--transition-fast);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.filter-pill:hover {
+  color: var(--text-primary);
+  border-color: var(--border-glow);
+}
+
+.filter-pill.active {
+  background: var(--accent-gradient);
+  color: #fff;
+  border-color: transparent;
+}
+
+.filter-clear {
+  padding: 8px 16px;
+  border-radius: var(--radius-full);
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--danger);
+  background: rgba(var(--danger-rgb), 0.1);
+  border: 1px solid transparent;
+  transition: all var(--transition-fast);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.filter-clear:hover {
+  background: rgba(var(--danger-rgb), 0.2);
+}
+
+/* Sort + view toggle strip */
+.expenses-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-lg);
+}
+
+.expenses-sort-info {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.expenses-sort-info strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.view-toggle {
+  display: flex;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 3px;
+  gap: 2px;
+}
+
+.view-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  transition: all var(--transition-fast);
+  position: relative;
+}
+
+.view-toggle-btn:hover {
+  color: var(--text-primary);
+}
+
+.view-toggle-btn.active {
+  color: #fff;
+}
+
+.view-toggle-bg {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-sm);
+  background: var(--accent-gradient);
+  z-index: 0;
+}
+
+.view-toggle-btn svg {
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Card Grid View ── */
+.expenses-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--space-lg);
+}
+
+.expense-card {
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+.expense-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: var(--space-md);
+}
+
+.expense-card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.expense-card-amount {
+  font-family: var(--font-heading);
+  font-size: 1.375rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.expense-card-merchant {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.expense-card-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+  margin-top: var(--space-sm);
+}
+
+.expense-card-date {
+  font-size: 0.8rem;
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.expense-card-recurring {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: rgba(var(--accent-secondary-rgb), 0.12);
+  color: var(--accent-secondary);
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+/* ── Table View ── */
+.expenses-table-wrapper {
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-card);
+  backdrop-filter: blur(12px);
+}
+
+.expenses-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.expenses-table thead {
+  background: rgba(var(--accent-primary-rgb), 0.06);
+}
+
+.expenses-table th {
+  padding: var(--space-md) var(--space-lg);
+  text-align: left;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition: color var(--transition-fast);
+}
+
+.expenses-table th:hover {
+  color: var(--text-primary);
+}
+
+.expenses-table th.sorted {
+  color: var(--accent-primary);
+}
+
+.expenses-table th .sort-icon {
+  display: inline-flex;
+  margin-left: 4px;
+  vertical-align: middle;
+  opacity: 0.5;
+}
+
+.expenses-table th.sorted .sort-icon {
+  opacity: 1;
+}
+
+.expenses-table td {
+  padding: var(--space-md) var(--space-lg);
+  font-size: 0.9rem;
+  border-top: 1px solid var(--border-subtle);
+  white-space: nowrap;
+  color: var(--text-primary);
+}
+
+.expenses-table tbody tr {
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.expenses-table tbody tr:hover {
+  background: var(--bg-hover);
+}
+
+.expenses-table .table-merchant {
+  font-weight: 500;
+}
+
+.expenses-table .table-amount {
+  font-weight: 600;
+  font-family: var(--font-heading);
+  color: var(--text-primary);
+}
+
+.expenses-table .table-date {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.expenses-table .table-recurring {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: rgba(var(--accent-secondary-rgb), 0.12);
+  color: var(--accent-secondary);
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+/* ── Pagination ── */
+.expenses-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  margin-top: var(--space-xl);
+  padding: var(--space-md) 0;
+}
+
+.expenses-pagination-info {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  min-width: 150px;
+  text-align: center;
+}
+
+.pagination-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 8px 18px;
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all var(--transition-fast);
+}
+
+.pagination-btn:hover:not(:disabled) {
+  border-color: var(--accent-primary);
+  box-shadow: var(--shadow-glow);
+}
+
+.pagination-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── Empty state ── */
+.expenses-empty-wrapper {
+  padding: var(--space-3xl) 0;
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .expenses-filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .expenses-filter-bar .input-wrapper {
+    max-width: 100%;
+  }
+
+  .expenses-filter-bar .dropdown {
+    min-width: 100%;
+  }
+
+  .expenses-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .expenses-table th,
+  .expenses-table td {
+    padding: var(--space-sm) var(--space-md);
+    font-size: 0.8rem;
+  }
+
+  .expenses-page-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

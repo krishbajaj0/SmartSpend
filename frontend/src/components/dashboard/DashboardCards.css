@@ -1,0 +1,114 @@
+.stat-card-premium {
+    position: relative;
+    background: var(--bg-card);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-xl);
+    padding: var(--space-lg);
+    overflow: hidden;
+    transition: all var(--transition-base);
+}
+
+.stat-card-premium:hover {
+    border-color: var(--card-color);
+    transform: translateY(-4px);
+    box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.3);
+}
+
+.stat-card-accent {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    opacity: 0.6;
+}
+
+.stat-card-glow {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 120px;
+    pointer-events: none;
+}
+
+.stat-card-header-premium {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: var(--space-md);
+    position: relative;
+    z-index: 1;
+}
+
+.stat-card-label-premium {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.stat-card-icon-premium {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-lg);
+    background: rgba(255, 255, 255, 0.05);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--card-color);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.stat-card-value-premium {
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin-bottom: var(--space-sm);
+    position: relative;
+    z-index: 1;
+    letter-spacing: -0.02em;
+}
+
+.stat-card-prefix {
+    font-weight: 600;
+    opacity: 0.7;
+    margin-right: 2px;
+}
+
+.stat-card-change-premium {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--text-tertiary);
+}
+
+.stat-card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: var(--space-sm);
+}
+
+.stat-card-sparkline {
+    width: 60px;
+    height: 24px;
+    opacity: 0.8;
+}
+
+.sparkline-mini {
+    width: 100%;
+    height: 100%;
+}
+
+.stat-card-change-premium.up {
+    color: var(--success);
+}
+
+.stat-card-change-premium.down {
+    color: var(--danger);
+}

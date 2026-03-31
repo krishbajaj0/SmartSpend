@@ -1,0 +1,57 @@
+.app-layout {
+    display: flex;
+    min-height: 100vh;
+    background: var(--bg-primary);
+}
+
+.app-main {
+    flex: 1;
+    margin-left: var(--sidebar-width);
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    transition: margin-left var(--transition-slow);
+    position: relative;
+}
+
+.app-main::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 50%;
+    height: 50%;
+    background: radial-gradient(circle at 100% 0%, rgba(139, 92, 246, 0.05) 0%, transparent 40%);
+    pointer-events: none;
+    z-index: 0;
+}
+
+.app-content {
+    flex: 1;
+    padding: var(--space-lg);
+    overflow-y: auto;
+    position: relative;
+    z-index: 1;
+}
+
+/* When sidebar is collapsed */
+.sidebar.collapsed ~ .app-main {
+    margin-left: var(--sidebar-collapsed);
+}
+
+@media (max-width: 1024px) {
+    .app-main {
+        margin-left: var(--sidebar-collapsed);
+    }
+}
+
+@media (max-width: 768px) {
+    .app-main {
+        margin-left: 0;
+    }
+
+    .app-content {
+        padding: var(--space-md);
+        padding-bottom: calc(var(--bottom-nav-height) + var(--space-md));
+    }
+}

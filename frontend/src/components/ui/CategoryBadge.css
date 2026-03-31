@@ -1,0 +1,32 @@
+.category-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: var(--radius-full);
+    background: rgba(var(--cat-color-rgb, 108, 92, 231), 0.12);
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.category-badge-sm {
+    font-size: 0.7rem;
+    padding: 2px 8px;
+}
+
+.category-badge-md {
+    font-size: 0.8rem;
+}
+
+.category-badge-lg {
+    font-size: 0.9rem;
+    padding: 6px 16px;
+}
+
+.category-badge-icon {
+    font-size: 0.9em;
+}
+
+.category-badge-label {
+    color: var(--text-primary);
+}

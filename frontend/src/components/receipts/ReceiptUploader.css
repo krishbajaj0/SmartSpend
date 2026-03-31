@@ -1,0 +1,275 @@
+/* ========================================
+   Receipt Uploader — Drag & Drop + OCR Review
+   ======================================== */
+
+/* Upload zone */
+.receipt-upload-zone {
+  position: relative;
+  border: 2px dashed var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3xl) var(--space-xl);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color var(--transition-base),
+              background var(--transition-base);
+  background: var(--bg-card);
+  min-height: 220px;
+  overflow: hidden;
+}
+
+.receipt-upload-zone:hover,
+.receipt-upload-zone.drag-over {
+  border-color: var(--accent-primary);
+  background: rgba(var(--accent-primary-rgb), 0.04);
+}
+
+.receipt-upload-zone.drag-over {
+  animation: pulseGlow 1.5s ease-in-out infinite;
+}
+
+.receipt-upload-zone.drag-over .upload-icon {
+  transform: scale(1.2);
+}
+
+.upload-icon {
+  color: var(--text-tertiary);
+  transition: transform var(--transition-spring), color var(--transition-base);
+}
+
+.receipt-upload-zone:hover .upload-icon {
+  color: var(--accent-primary);
+}
+
+.upload-text {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.upload-text strong {
+  color: var(--accent-primary);
+}
+
+.upload-hint {
+  font-size: 0.8rem;
+  color: var(--text-tertiary);
+}
+
+.upload-input {
+  display: none;
+}
+
+/* Receipt preview */
+.receipt-preview-container {
+  position: relative;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.receipt-preview-img {
+  width: 100%;
+  display: block;
+  border-radius: var(--radius-lg);
+}
+
+/* Scanning overlay */
+.scan-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  z-index: 2;
+}
+
+.scan-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, var(--accent-primary), var(--accent-secondary), transparent);
+  box-shadow: 0 0 12px var(--accent-primary), 0 0 24px rgba(var(--accent-primary-rgb), 0.4);
+  animation: scanSweep 2s ease-in-out infinite;
+}
+
+@keyframes scanSweep {
+  0% { top: 0; }
+  50% { top: 100%; }
+  100% { top: 0; }
+}
+
+.scan-text {
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  z-index: 3;
+}
+
+.scan-text .animate-spin {
+  display: inline-block;
+}
+
+/* OCR Result review */
+.ocr-result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.ocr-result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ocr-result-header h3 {
+  font-size: 1.125rem;
+}
+
+.ocr-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.ocr-field {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.ocr-field-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ocr-field-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-tertiary);
+  font-weight: 500;
+}
+
+.ocr-field-input {
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  font-family: var(--font-body);
+  width: 100%;
+  transition: border-color var(--transition-base);
+}
+
+.ocr-field-input:focus {
+  border-color: var(--accent-primary);
+  outline: none;
+}
+
+/* Confidence badge */
+.confidence-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+
+.confidence-badge.high {
+  background: rgba(var(--success-rgb), 0.12);
+  color: var(--success);
+}
+
+.confidence-badge.low {
+  background: rgba(var(--warning-rgb), 0.12);
+  color: var(--warning);
+}
+
+/* Line items */
+.ocr-line-items {
+  padding: var(--space-md);
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.ocr-line-items h4 {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-sm);
+}
+
+.ocr-line-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.ocr-line-item:last-child {
+  border-bottom: none;
+}
+
+.ocr-line-item-amount {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Raw text */
+.ocr-raw-text {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  background: var(--bg-input);
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  white-space: pre-wrap;
+  max-height: 120px;
+  overflow-y: auto;
+  border: 1px solid var(--border-subtle);
+}
+
+.ocr-actions {
+  display: flex;
+  gap: var(--space-md);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* ── Responsive ── */
+@media (max-width: 600px) {
+  .receipt-upload-zone {
+    padding: var(--space-xl) var(--space-md);
+    min-height: 160px;
+  }
+}
