@@ -1,5 +1,9 @@
+if (!process.env.JWT_SECRET) {
+    throw new Error('FATAL: JWT_SECRET environment variable is not set. Refusing to start with no signing key.');
+}
+
 export default {
-    jwtSecret: process.env.JWT_SECRET || 'fallback_secret',
+    jwtSecret: process.env.JWT_SECRET,
     jwtExpire: process.env.JWT_EXPIRE || '7d',
     port: process.env.PORT || 5000,
     frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
