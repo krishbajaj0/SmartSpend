@@ -1,3 +1,11 @@
+# Environment variables
+.env
+
+# Patches and reports
+*.patch
+eslint.json
+eslint_report.txt
+
 # Logs
 logs
 *.log
