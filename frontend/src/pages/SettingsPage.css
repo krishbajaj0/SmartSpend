@@ -1,0 +1,159 @@
+/* ========================================
+   Settings & Profile Page
+   ======================================== */
+
+.settings-page-header {
+  margin-bottom: var(--space-xl);
+}
+
+.settings-page-header h1 {
+  font-size: 1.75rem;
+}
+
+.settings-sections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+  max-width: 720px;
+}
+
+/* Section header */
+.settings-section-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--space-lg);
+}
+
+.settings-section-title svg {
+  color: var(--accent-primary);
+}
+
+/* Profile row */
+.settings-profile-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+  margin-bottom: var(--space-xl);
+}
+
+.settings-avatar-upload {
+  position: relative;
+  cursor: pointer;
+}
+
+.settings-avatar-upload .avatar {
+  width: 80px;
+  height: 80px;
+  font-size: 1.75rem;
+}
+
+.settings-avatar-overlay {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+  color: #fff;
+}
+
+.settings-avatar-upload:hover .settings-avatar-overlay {
+  opacity: 1;
+}
+
+.settings-avatar-input {
+  display: none;
+}
+
+.settings-profile-fields {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-md);
+}
+
+/* Setting row */
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.setting-row:last-child {
+  border-bottom: none;
+}
+
+.setting-row-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.setting-row-label {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.setting-row-desc {
+  font-size: 0.8rem;
+  color: var(--text-tertiary);
+}
+
+/* Currency select */
+.currency-select {
+  min-width: 160px;
+}
+
+/* Danger zone */
+.settings-danger-zone {
+  border: 1px solid rgba(var(--danger-rgb), 0.3);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  background: rgba(var(--danger-rgb), 0.04);
+}
+
+.settings-danger-zone .settings-section-title {
+  color: var(--danger);
+}
+
+.settings-danger-zone .settings-section-title svg {
+  color: var(--danger);
+}
+
+.danger-actions {
+  display: flex;
+  gap: var(--space-md);
+  margin-top: var(--space-md);
+}
+
+/* Save bar */
+.settings-save-bar {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-md);
+  padding-top: var(--space-lg);
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  .settings-profile-row {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .settings-profile-fields {
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+}

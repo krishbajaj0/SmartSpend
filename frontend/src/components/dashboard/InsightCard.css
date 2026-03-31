@@ -1,0 +1,89 @@
+.ai-insight-card {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-md);
+    background: var(--bg-card);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-xl);
+    padding: var(--space-lg);
+    transition: all var(--transition-base);
+}
+
+.ai-insight-card:hover {
+    border-color: var(--accent-primary);
+}
+
+.ai-insight-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-lg);
+    background: var(--accent-gradient);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    flex-shrink: 0;
+}
+
+.ai-insight-content {
+    flex: 1;
+}
+
+.ai-insight-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--accent-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 4px;
+}
+
+.ai-insight-text {
+    font-size: 0.9375rem;
+    color: var(--text-primary);
+    line-height: 1.5;
+}
+
+.ai-insight-card.warning .ai-insight-icon {
+    background: var(--warning);
+}
+
+.ai-insight-card.caution .ai-insight-icon {
+    background: var(--danger);
+}
+
+.ai-insight-card.good .ai-insight-icon {
+    background: var(--success);
+}
+
+.ai-insight-card.info .ai-insight-icon {
+    background: var(--accent-primary);
+}
+
+.ai-insight-emoji {
+    margin-right: 4px;
+}
+
+.ai-insight-suggestions {
+    margin-top: var(--space-md);
+    padding-top: var(--space-md);
+    border-top: 1px solid var(--border-subtle);
+}
+
+.ai-suggestion-item {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-sm);
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+    margin-bottom: var(--space-xs);
+}
+
+.ai-suggestion-bullet {
+    color: var(--accent-primary);
+    flex-shrink: 0;
+}

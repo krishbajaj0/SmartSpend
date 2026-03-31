@@ -1,0 +1,123 @@
+.subscriptions-card {
+    margin-top: 0;
+}
+
+.subscriptions-card .chart-header {
+    margin-bottom: var(--space-md);
+}
+
+.subscriptions-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+}
+
+.subscription-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    padding: var(--space-sm) var(--space-md);
+    border-radius: var(--radius-md);
+    transition: background 0.2s;
+    cursor: default;
+}
+
+.subscription-row:hover {
+    background: rgba(108, 92, 231, 0.04);
+}
+
+.subscription-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.subscription-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.subscription-merchant {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.subscription-interval {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.subscription-amount {
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--text-primary);
+    white-space: nowrap;
+}
+
+.subscription-amount small {
+    font-weight: 400;
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+}
+
+.subscription-convert-btn {
+    background: rgba(108, 92, 231, 0.1);
+    border: 1px solid rgba(108, 92, 231, 0.2);
+    color: var(--accent-primary);
+    padding: 4px 10px;
+    border-radius: var(--radius-md);
+    font-size: 0.7rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+    font-weight: 500;
+}
+
+.subscription-convert-btn:hover {
+    background: rgba(108, 92, 231, 0.2);
+}
+
+.subscription-convert-btn.converted {
+    background: rgba(0, 184, 148, 0.1);
+    border-color: rgba(0, 184, 148, 0.2);
+    color: var(--success);
+    cursor: default;
+}
+
+.subscriptions-empty {
+    text-align: center;
+    color: var(--text-tertiary);
+    padding: var(--space-lg);
+    font-size: 0.9rem;
+}
+
+.subscriptions-total {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-sm) var(--space-md);
+    margin-top: var(--space-sm);
+    border-top: 1px solid var(--border-subtle);
+    font-size: 0.85rem;
+}
+
+.subscriptions-total span:first-child {
+    color: var(--text-secondary);
+}
+
+.subscriptions-total span:last-child {
+    font-weight: 700;
+    color: var(--accent-primary);
+}

@@ -1,0 +1,159 @@
+/* ========================================
+   Analytics & Reports Page
+   ======================================== */
+
+.analytics-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+  margin-bottom: var(--space-xl);
+}
+
+.analytics-page-header h1 {
+  font-size: 1.75rem;
+}
+
+.analytics-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-xl);
+}
+
+.analytics-grid-full {
+  grid-column: 1 / -1;
+}
+
+/* Section headers */
+.analytics-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-lg);
+}
+
+.analytics-section-header h3 {
+  font-size: 1.125rem;
+}
+
+/* Chart card */
+.analytics-chart-card {
+  overflow: visible;
+}
+
+/* Monthly comparison */
+.comparison-legend {
+  display: flex;
+  gap: var(--space-lg);
+  margin-top: var(--space-md);
+  font-size: 0.8rem;
+}
+
+.comparison-legend-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  color: var(--text-secondary);
+}
+
+.comparison-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+/* Top merchants */
+.top-merchants-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.top-merchant-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.top-merchant-rank {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-full);
+  background: rgba(var(--accent-primary-rgb), 0.12);
+  color: var(--accent-primary);
+  font-size: 0.75rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.top-merchant-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.top-merchant-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
+.top-merchant-visits {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+}
+
+.top-merchant-bar-wrapper {
+  flex: 1;
+  height: 8px;
+  background: var(--bg-input);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.top-merchant-bar {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--accent-gradient);
+  transition: width 1s ease-out;
+}
+
+.top-merchant-amount {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  min-width: 80px;
+  text-align: right;
+}
+
+/* Export buttons */
+.export-buttons {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .analytics-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .analytics-page-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .top-merchant-item {
+    flex-wrap: wrap;
+  }
+
+  .top-merchant-bar-wrapper {
+    width: 100%;
+    flex: none;
+  }
+}

@@ -1,0 +1,103 @@
+.input-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.input-wrapper input,
+.input-wrapper textarea {
+    width: 100%;
+    padding: 16px 16px 8px;
+    background: var(--bg-input);
+    border: 1.5px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-size: 1rem;
+    transition: border-color var(--transition-base), box-shadow var(--transition-base);
+}
+
+.input-wrapper input.has-icon {
+    padding-left: 44px;
+}
+
+.input-wrapper.focused input,
+.input-wrapper.focused textarea {
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 3px rgba(var(--accent-primary-rgb), 0.15);
+}
+
+.input-wrapper.has-error input,
+.input-wrapper.has-error textarea {
+    border-color: var(--danger);
+    box-shadow: 0 0 0 3px rgba(var(--danger-rgb), 0.15);
+    animation: shake 0.4s ease-in-out;
+}
+
+.input-label {
+    position: absolute;
+    left: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-tertiary);
+    font-size: 1rem;
+    pointer-events: none;
+    transition: all var(--transition-fast);
+}
+
+.input-wrapper textarea~.input-label {
+    top: 20px;
+}
+
+/* Float up on focus or when has value */
+.input-wrapper.focused .input-label,
+.input-wrapper.has-value .input-label {
+    top: 8px;
+    transform: translateY(0);
+    font-size: 0.7rem;
+    color: var(--accent-primary);
+    font-weight: 500;
+}
+
+.input-wrapper.has-error .input-label {
+    color: var(--danger);
+}
+
+.input-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-tertiary);
+    display: flex;
+    z-index: 1;
+}
+
+.input-icon svg {
+    width: 18px;
+    height: 18px;
+}
+
+.input-wrapper.focused .input-icon {
+    color: var(--accent-primary);
+}
+
+.input-wrapper input.has-icon~.input-label {
+    left: 44px;
+}
+
+.input-wrapper.focused input.has-icon~.input-label,
+.input-wrapper.has-value input.has-icon~.input-label {
+    left: 16px;
+}
+
+.input-error {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--danger);
+    margin-top: 4px;
+    padding-left: 4px;
+}
+
+.input-wrapper textarea {
+    resize: vertical;
+    min-height: 100px;
+}

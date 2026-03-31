@@ -1,0 +1,57 @@
+.floating-add-btn {
+    position: fixed;
+    bottom: 32px;
+    right: 32px;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: var(--accent-gradient);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 8px 32px rgba(139, 92, 246, 0.4);
+    z-index: 100;
+    border: none;
+    cursor: pointer;
+    overflow: visible;
+}
+
+.floating-btn-glow {
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    background: var(--accent-gradient);
+    filter: blur(12px);
+    opacity: 0.5;
+    animation: floatGlow 2s ease-in-out infinite;
+}
+
+.floating-btn-pulse {
+    position: absolute;
+    inset: -8px;
+    border-radius: 50%;
+    border: 2px solid var(--accent-primary);
+    animation: floatPulse 2s ease-in-out infinite;
+}
+
+@keyframes floatGlow {
+    0%, 100% { opacity: 0.4; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(1.1); }
+}
+
+@keyframes floatPulse {
+    0%, 100% { opacity: 0.3; transform: scale(1); }
+    50% { opacity: 0; transform: scale(1.2); }
+}
+
+.floating-add-btn:hover {
+    box-shadow: 0 12px 40px rgba(139, 92, 246, 0.5);
+}
+
+@media (max-width: 768px) {
+    .floating-add-btn {
+        bottom: 24px;
+        right: 24px;
+    }
+}
