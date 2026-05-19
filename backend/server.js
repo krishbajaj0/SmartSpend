@@ -82,27 +82,38 @@ const server = http.createServer(app);
 app.use(helmet());
 app.use(compression());
 
-app.use(cors({
-    origin(origin, callback) {
-        // Allow requests with no origin (curl, Postman, mobile apps, server-to-server)
-        if (!origin) return callback(null, true);
+const ALLOWED_ORIGINS = [
+    'http://localhost:5173',
+    'https://smart-spend-ochre-two.vercel.app',
+    constants.frontendUrl
+];
 
-        const ALLOWED_ORIGINS = [
-            constants.frontendUrl,
-            'http://localhost:5173',
-            'http://localhost:4173',
-            'http://127.0.0.1:5173',
-        ];
+const corsOptions = {
+    origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps, curl, server-to-server)
+        if (!origin) return callback(null, true);
 
         const isLocalNetwork = /^https?:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+)(:\d+)?$/.test(origin);
 
         if (ALLOWED_ORIGINS.includes(origin) || isLocalNetwork) {
             return callback(null, true);
         }
-        return callback(new Error(`CORS: origin '${origin}' not allowed.`));
+        
+        // Return callback(null, false) instead of throwing an Error. 
+        // Throwing an Error triggers the default Express error handler which strips 
+        // CORS headers and causes a generic "No 'Access-Control-Allow-Origin' header" 
+        // error in the browser instead of a clean CORS rejection.
+        return callback(null, false);
     },
     credentials: true,
-}));
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'X-Requested-With', 'Accept'],
+};
+
+// Ensure CORS middleware is registered before ANY routes
+app.use(cors(corsOptions));
+// Explicitly handle preflight OPTIONS requests
+app.options('*', cors(corsOptions));
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));

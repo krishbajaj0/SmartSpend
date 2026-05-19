@@ -16,10 +16,17 @@ function extractSocketToken(socket) {
 }
 
 export function initSocket(server) {
+    const ALLOWED_ORIGINS = [
+        'http://localhost:5173',
+        'https://smart-spend-ochre-two.vercel.app',
+        constants.frontendUrl
+    ];
+
     io = new Server(server, {
         cors: {
-            origin: constants.frontendUrl,
+            origin: ALLOWED_ORIGINS,
             credentials: true,
+            methods: ['GET', 'POST', 'OPTIONS'],
         },
     });
 
