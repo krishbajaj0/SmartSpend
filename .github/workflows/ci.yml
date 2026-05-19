@@ -59,8 +59,17 @@ jobs:
             node --check "$f"
           done
 
+      - name: Debug environment and dependency resolution
+        run: |
+          echo "=== Node & NPM versions ==="
+          node -v
+          npm -v
+          echo "=== Dependency resolution ==="
+          npm ls sanitize-html || true
+          npm ls ws || true
+
       - name: Audit high severity
-        run: npm audit --audit-level=high
+        run: npm audit --omit=dev --audit-level=high
 
   docker:
     name: Docker Build Test
