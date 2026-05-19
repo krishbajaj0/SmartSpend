@@ -1,14 +1,20 @@
 import nodemailer from 'nodemailer';
+import constants from '../config/constants.js';
 
 let transporter = null;
 
 function getTransporter() {
     if (!transporter) {
+        const isGmail = constants.smtp.host === 'smtp.gmail.com' || !constants.smtp.host;
         transporter = nodemailer.createTransport({
-            service: 'gmail',
+            ...(isGmail ? { service: 'gmail' } : {
+                host: constants.smtp.host,
+                port: constants.smtp.port,
+                secure: constants.smtp.port === 465,
+            }),
             auth: {
-                user: process.env.SMTP_USER,
-                pass: process.env.SMTP_PASS,
+                user: constants.smtp.email,
+                pass: constants.smtp.password,
             },
         });
     }
@@ -17,7 +23,7 @@ function getTransporter() {
 
 export const sendEmail = async ({ email, subject, message, html }) => {
     // If SMTP credentials are not provided, log the email and return success
-    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    if (!constants.smtp.email || !constants.smtp.password) {
         if (process.env.NODE_ENV === 'test' && process.env.ALLOW_DEBUG_OTP === 'true') {
             console.log('--- MOCK EMAIL START ---');
             console.log(`To: ${email}`);
@@ -30,7 +36,7 @@ export const sendEmail = async ({ email, subject, message, html }) => {
     }
 
     const mailOptions = {
-        from: `SmartExpense <${process.env.SMTP_USER}>`,
+        from: `SmartExpense <${constants.smtp.email}>`,
         to: email,
         subject,
         text: message,

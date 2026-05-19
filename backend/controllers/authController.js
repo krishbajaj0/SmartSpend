@@ -39,6 +39,7 @@
 import crypto from 'crypto';
 import User from '../models/User.js';
 import { AppError } from '../middleware/errorHandler.js';
+import logger from '../config/logger.js';
 import { hashOtp } from '../utils/otp.js';
 import { signToken } from '../utils/token.js';
 import { sendOtpEmail, sendLoginOtpEmail } from '../services/emailService.js';
@@ -207,7 +208,23 @@ export async function register(req, res, next) {
             isVerified:   false,
         });
 
-        await sendOtpEmail(email, plainOtp);  // plaintext sent to user's inbox only
+        try {
+            await sendOtpEmail(email, plainOtp);  // plaintext sent to user's inbox only
+        } catch (smtpErr) {
+            logger.error({ err: smtpErr, email }, 'SMTP service is unavailable during registration. Cleaning up user document.');
+            
+            // Delete user document since they cannot verify or log in anyway
+            try {
+                await User.deleteOne({ _id: user._id }).maxTimeMS(DB_TIMEOUT);
+            } catch (cleanupErr) {
+                logger.error({ err: cleanupErr, userId: user._id }, 'Failed to clean up user document after SMTP failure');
+            }
+
+            return res.status(503).json({
+                success: false,
+                message: 'Verification email service is currently unavailable. Please try again later.',
+            });
+        }
 
         const response = {
             success: true,

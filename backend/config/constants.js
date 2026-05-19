@@ -23,6 +23,23 @@ if (missing.length) {
     process.exit(1);
 }
 
+// ── SMTP Environment Validation ───────────────────────────────────────────────
+const smtpEmail = process.env.SMTP_EMAIL || process.env.SMTP_USER;
+const smtpPassword = process.env.SMTP_PASSWORD || process.env.SMTP_PASS;
+
+if (smtpEmail || smtpPassword) {
+    if (!smtpEmail || !smtpPassword) {
+        logger.fatal('FATAL: If SMTP is configured, both SMTP_EMAIL (or SMTP_USER) and SMTP_PASSWORD (or SMTP_PASS) must be set.');
+        process.exit(1);
+    }
+    // Simple email regex validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(smtpEmail)) {
+        logger.fatal('FATAL: SMTP_EMAIL/SMTP_USER must be a valid email address format.');
+        process.exit(1);
+    }
+}
+
 // ── Secret strength checks ────────────────────────────────────────────────────
 if (process.env.JWT_SECRET.length < 32) {
     logger.fatal('FATAL: JWT_SECRET must be at least 32 characters. Use a cryptographically random value.');
@@ -86,6 +103,14 @@ const constants = deepFreeze({
 
     // CORS
     frontendUrl: process.env.FRONTEND_URL ?? 'http://localhost:5173',
+
+    // SMTP
+    smtp: {
+        email: process.env.SMTP_EMAIL || process.env.SMTP_USER,
+        password: process.env.SMTP_PASSWORD || process.env.SMTP_PASS,
+        host: process.env.SMTP_HOST || 'smtp.gmail.com',
+        port: parseInt(process.env.SMTP_PORT || '587', 10),
+    },
 
     // Pagination
     pagination: {
