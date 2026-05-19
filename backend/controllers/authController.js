@@ -186,53 +186,38 @@ async function atomicVerifyOtp(email, submittedOtp, extraSelect = '') {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// POST /api/auth/register
-// ─────────────────────────────────────────────────────────────────────────────
 export async function register(req, res, next) {
     try {
         const { name, email, password } = req.body;
 
         const exists = await User.findOne({ email }).maxTimeMS(DB_TIMEOUT);
-        if (exists) throw new AppError('Email already registered', 409);
+        if (exists) {
+            return res.status(409).json({ success: false, message: 'Email already registered' });
+        }
 
-        const plainOtp  = generateOtp();
-        const otpExpire = new Date(Date.now() + 10 * 60 * 1000); // 10 min
-
+        // Temporarily set isVerified: true to fully bypass SMTP verification in production
         const user = await User.create({
             name,
             email,
             passwordHash: password,
-            otp:          hashOtp(plainOtp),  // stored as HMAC hash, never plaintext
-            otpExpire,
+            otp:          null,
+            otpExpire:    null,
             otpAttempts:  0,
-            isVerified:   false,
+            isVerified:   true,
         });
 
-        try {
-            await sendOtpEmail(email, plainOtp);  // plaintext sent to user's inbox only
-        } catch (smtpErr) {
-            logger.error({ err: smtpErr, email }, 'SMTP service is unavailable during registration. Cleaning up user document.');
-            
-            // Delete user document since they cannot verify or log in anyway
-            try {
-                await User.deleteOne({ _id: user._id }).maxTimeMS(DB_TIMEOUT);
-            } catch (cleanupErr) {
-                logger.error({ err: cleanupErr, userId: user._id }, 'Failed to clean up user document after SMTP failure');
-            }
+        // Issue session token cookies directly upon successful signup
+        issueSession(res, user);
 
-            return res.status(503).json({
-                success: false,
-                message: 'Verification email service is currently unavailable. Please try again later.',
-            });
-        }
-
-        const response = {
+        return res.status(201).json({
             success: true,
-            message: 'Registration successful. Please verify your email with the OTP sent.',
-            email:   user.email,
-        };
-        res.status(201).json(response);
-    } catch (err) { next(err); }
+            message: 'Registration successful.',
+            user:    publicUser(user),
+        });
+    } catch (err) {
+        if (res.headersSent) return;
+        return next(err);
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
