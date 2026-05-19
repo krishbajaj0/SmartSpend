@@ -48,9 +48,14 @@ export function AuthProvider({ children }) {
 
     const register = useCallback(async (name, email, password) => {
         const res = await authAPI.register({ name, email, password });
-        // Registration now sends an OTP, so we don't get a token/user yet
+        const { user: u } = res.data;
+        if (u) {
+            setUser(u);
+            initSocket();
+        }
         return res.data;
-    }, []);
+
+    }, [initSocket]);
 
     const verifyOtp = useCallback(async (email, otp) => {
         const res = await authAPI.verifyOtp({ email, otp });

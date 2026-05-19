@@ -75,7 +75,8 @@ export default function RegisterPage() {
         setLoading(true);
         try {
             await register(name, email, password);
-            setShowOtp(true);
+            success('Account created successfully!');
+            navigate('/dashboard');
         } catch (err) {
             setErrors({ email: err.response?.data?.message || 'Registration failed' });
         } finally {
