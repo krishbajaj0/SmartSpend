@@ -100,11 +100,11 @@ const corsOptions = {
             return callback(null, true);
         }
 
-        // Return callback(null, false) instead of throwing an Error. 
-        // Throwing an Error triggers the default Express error handler which strips 
-        // CORS headers and causes a generic "No 'Access-Control-Allow-Origin' header" 
-        // error in the browser instead of a clean CORS rejection.
-        return callback(null, false);
+        if (constants.isProduction) {
+            return callback(null, false);
+        } else {
+            return callback(new Error(`Origin ${origin} not allowed by CORS`));
+        }
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
@@ -127,7 +127,7 @@ app.use('/api', controlPlane);
 // ── Request timeout ───────────────────────────────────────────────────────────
 // Every API request has a hard ceiling. Handlers that take longer get a 503.
 // Configurable via REQUEST_TIMEOUT_MS env var (default 30 s).
-const REQUEST_TIMEOUT_MS = parseInt(process.env.REQUEST_TIMEOUT_MS ?? '30000', 10);
+const REQUEST_TIMEOUT_MS = parseInt(process.env.REQUEST_TIMEOUT_MS ?? '15000', 10);
 app.use(requestTimeout(REQUEST_TIMEOUT_MS));
 
 // ── Rate limiting ─────────────────────────────────────────────────────────────

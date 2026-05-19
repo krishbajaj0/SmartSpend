@@ -25,7 +25,7 @@ function cookieOptions(overrides = {}) {
     return {
         httpOnly: true,
         secure: constants.isProduction,
-        sameSite: 'lax',
+        sameSite: constants.isProduction ? 'none' : 'lax',
         path: '/',
         ...overrides,
     };
