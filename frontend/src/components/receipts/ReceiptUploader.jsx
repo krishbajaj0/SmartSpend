@@ -35,6 +35,7 @@ export default function ReceiptUploader({ onSaveExpense }) {
     const [accounts, setAccounts] = useState([]);
     const [loadingAccounts, setLoadingAccounts] = useState(false);
     const [errors, setErrors] = useState({});
+    const [saving, setSaving] = useState(false);
     const inputRef = useRef(null);
 
     useEffect(() => {
@@ -57,7 +58,7 @@ export default function ReceiptUploader({ onSaveExpense }) {
     }, [previewUrl]);
 
     const handleFile = useCallback(async (f) => {
-        if (!f || !f.type.startsWith('image/')) return;
+        if (!f || !f.type.startsWith('image/') || scanning || saving) return;
         setFile(f);
         setPreviewUrl(prev => {
             if (prev) URL.revokeObjectURL(prev);
@@ -91,7 +92,7 @@ export default function ReceiptUploader({ onSaveExpense }) {
         } finally {
             setScanning(false);
         }
-    }, [accounts]);
+    }, [accounts, scanning, saving]);
 
     const handleDrop = useCallback((e) => {
         e.preventDefault();
@@ -128,7 +129,7 @@ export default function ReceiptUploader({ onSaveExpense }) {
     }
 
     async function handleSave() {
-        if (!receipt) return;
+        if (!receipt || saving) return;
 
         const errs = {};
         if (!editedData.amount || parseFloat(editedData.amount) <= 0) {
@@ -156,12 +157,15 @@ export default function ReceiptUploader({ onSaveExpense }) {
             fromAccountId: editedData.accountId,
             notes: '',
         };
+        setSaving(true);
         try {
             const res = await receiptsAPI.linkExpense(receipt._id, expenseData);
             onSaveExpense(res.data.expense, res.data.receipt);
             reset();
         } catch (err) {
             setScanError(err.response?.data?.message || 'Failed to save receipt expense');
+        } finally {
+            setSaving(false);
         }
     }
 
@@ -373,8 +377,8 @@ export default function ReceiptUploader({ onSaveExpense }) {
                         {/* Actions */}
                         <div className="ocr-actions">
                             <Button variant="ghost" onClick={reset} fullWidth>Cancel</Button>
-                            <Button variant="primary" icon={<Save size={16} />} onClick={handleSave} fullWidth>
-                                Save as Expense
+                            <Button variant="primary" icon={<Save size={16} />} onClick={handleSave} loading={saving} disabled={saving} fullWidth>
+                                {saving ? 'Saving...' : 'Save as Expense'}
                             </Button>
                         </div>
                     </motion.div>

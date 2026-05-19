@@ -10,6 +10,7 @@ const receiptSchema = new mongoose.Schema({
     fileName: { type: String, required: true },
     fileUrl: { type: String, required: true },
     fileSize: { type: Number },
+    fileHash: { type: String },
     ocrData: {
         amount: { value: Number, confidence: Number },
         date: { value: String, confidence: Number },

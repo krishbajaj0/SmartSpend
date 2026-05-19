@@ -11,6 +11,7 @@ import constants from '../config/constants.js';
 import { invalidateUserDerivedCache } from '../utils/cache.js';
 import { writeAuditLog } from '../utils/audit.js';
 import { createExpenseTransaction, getOrCreateMigratedBalanceAccount } from '../services/transactionService.js';
+import logger from '../config/logger.js';
 
 // Multer config
 const storage = multer.diskStorage({
@@ -39,11 +40,33 @@ export const upload = multer({
 
 // POST /api/receipts/scan
 export async function scanReceipt(req, res, next) {
+    let filePath = null;
     try {
         if (!req.file) throw new AppError('No image uploaded', 400);
 
-        const filePath = req.file.path;
+        filePath = req.file.path;
         const fileUrl = `/uploads/receipts/${req.file.filename}`;
+
+        // Compute hash to prevent duplicate receipt documents
+        const fileBuffer = fs.readFileSync(filePath);
+        const fileHash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
+
+        // Check if receipt already exists for this user with same hash
+        const existingReceipt = await Receipt.findOne({ userId: req.user._id, fileHash });
+        if (existingReceipt) {
+            // Cleanup the newly uploaded duplicate file on disk
+            try {
+                fs.unlinkSync(filePath);
+            } catch (err) {
+                logger.error({ err, filePath }, 'Failed to delete duplicate uploaded file');
+            }
+
+            // Return the existing receipt
+            const baseUrl = `${req.protocol}://${req.get('host')}`;
+            const receiptObj = existingReceipt.toObject();
+            receiptObj.fileUrl = `${baseUrl}${existingReceipt.fileUrl}`;
+            return res.status(200).json({ success: true, receipt: receiptObj, duplicate: true });
+        }
 
         // Run OCR parsing
         const ocrResult = await parseReceipt(filePath);
@@ -53,6 +76,7 @@ export async function scanReceipt(req, res, next) {
             fileName: req.file.originalname,
             fileUrl,
             fileSize: req.file.size,
+            fileHash,
             ocrData: ocrResult,
         });
         await writeAuditLog(req, {
@@ -62,15 +86,40 @@ export async function scanReceipt(req, res, next) {
             after: receipt.toObject(),
         });
 
-        res.status(201).json({ success: true, receipt });
-    } catch (err) { next(err); }
+        // Fully qualified URL
+        const baseUrl = `${req.protocol}://${req.get('host')}`;
+        const receiptObj = receipt.toObject();
+        receiptObj.fileUrl = `${baseUrl}${receipt.fileUrl}`;
+
+        res.status(201).json({ success: true, receipt: receiptObj });
+    } catch (err) {
+        // Cleanup file on error to prevent leaking temp files
+        if (filePath) {
+            try {
+                if (fs.existsSync(filePath)) {
+                    fs.unlinkSync(filePath);
+                }
+            } catch (cleanupErr) {
+                logger.error({ err: cleanupErr, filePath }, 'Failed to clean up file after scan error');
+            }
+        }
+        next(err);
+    }
 }
 
 // GET /api/receipts
 export async function getReceipts(req, res, next) {
     try {
         const receipts = await Receipt.find({ userId: req.user._id }).sort({ createdAt: -1 });
-        res.json({ success: true, receipts });
+        const baseUrl = `${req.protocol}://${req.get('host')}`;
+        const normalizedReceipts = receipts.map(r => {
+            const obj = r.toObject();
+            if (obj.fileUrl && !obj.fileUrl.startsWith('http')) {
+                obj.fileUrl = `${baseUrl}${obj.fileUrl}`;
+            }
+            return obj;
+        });
+        res.json({ success: true, receipts: normalizedReceipts });
     } catch (err) { next(err); }
 }
 
@@ -79,7 +128,13 @@ export async function getReceipt(req, res, next) {
     try {
         const receipt = await Receipt.findOne({ _id: req.params.id, userId: req.user._id }).populate('linkedTransactionId');
         if (!receipt) throw new AppError('Receipt not found', 404);
-        res.json({ success: true, receipt });
+        
+        const baseUrl = `${req.protocol}://${req.get('host')}`;
+        const obj = receipt.toObject();
+        if (obj.fileUrl && !obj.fileUrl.startsWith('http')) {
+            obj.fileUrl = `${baseUrl}${obj.fileUrl}`;
+        }
+        res.json({ success: true, receipt: obj });
     } catch (err) { next(err); }
 }
 

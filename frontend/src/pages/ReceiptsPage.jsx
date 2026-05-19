@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Upload, Image, X } from 'lucide-react';
 import { format } from 'date-fns';
@@ -11,6 +11,8 @@ import { receiptsAPI } from '../utils/api';
 import { formatCurrency } from '../utils/currency';
 import './ReceiptsPage.css';
 
+const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1554415707-6e8cfc93fe23?w=500&auto=format&fit=crop&q=60';
+
 export default function ReceiptsPage() {
     const [tab, setTab] = useState('upload');
     const [receipts, setReceipts] = useState([]);
@@ -20,30 +22,55 @@ export default function ReceiptsPage() {
     const { user } = useAuth();
     const currency = user?.currency || 'INR';
 
-    useEffect(() => {
-        let active = true;
-        async function loadReceipts() {
-            try {
-                const res = await receiptsAPI.list();
-                if (active) setReceipts(res.data.receipts || []);
-            } catch {
-                addToast('Failed to load receipts', { type: 'error' });
-            } finally {
-                if (active) setLoading(false);
+    const loadReceipts = useCallback(async () => {
+        setLoading(true);
+        try {
+            const res = await receiptsAPI.list();
+            // Dedup array by ID just in case
+            const unique = [];
+            const seen = new Set();
+            for (const r of (res.data.receipts || [])) {
+                if (r && r._id && !seen.has(r._id)) {
+                    seen.add(r._id);
+                    unique.push(r);
+                }
             }
+            setReceipts(unique);
+        } catch {
+            addToast('Failed to load receipts', { type: 'error' });
+        } finally {
+            setLoading(false);
         }
-        loadReceipts();
-        return () => { active = false; };
     }, [addToast]);
 
+    useEffect(() => {
+        loadReceipts();
+    }, [loadReceipts]);
+
+    // Force refresh gallery when switching to gallery tab to avoid stale cached state
+    useEffect(() => {
+        if (tab === 'gallery') {
+            loadReceipts();
+        }
+    }, [tab, loadReceipts]);
+
     function handleSaveExpense(expense, receipt) {
-        setReceipts(prev => [receipt, ...prev.filter(item => item._id !== receipt._id)]);
+        setReceipts(prev => {
+            const filtered = prev.filter(item => item._id !== receipt._id);
+            return [receipt, ...filtered];
+        });
         addToast(`Receipt scanned and expense saved: ${formatCurrency(expense.amount, currency)}`, { type: 'success' });
         setTab('gallery');
+        loadReceipts();
     }
 
     function receiptImageUrl(receipt) {
-        return receiptsAPI.fileUrl(receipt._id);
+        if (!receipt) return FALLBACK_IMAGE;
+        return receipt.fileUrl || receiptsAPI.fileUrl(receipt._id);
+    }
+
+    function handleImageError(e) {
+        e.target.src = FALLBACK_IMAGE;
     }
 
     return (
@@ -107,29 +134,36 @@ export default function ReceiptsPage() {
                         />
                     ) : (
                         <div className="receipts-gallery">
-                            {receipts.map((rcpt, i) => (
-                                <motion.div
-                                    key={rcpt._id}
-                                    className="receipt-thumb"
-                                    initial={{ opacity: 0, scale: 0.9 }}
-                                    animate={{ opacity: 1, scale: 1 }}
-                                    transition={{ delay: i * 0.05 }}
-                                    onClick={() => setLightbox(rcpt)}
-                                >
-                                    <img src={receiptImageUrl(rcpt)} alt={rcpt.fileName} />
-                                    <div className="receipt-thumb-overlay">
-                                        <span className="receipt-thumb-merchant">
-                                            {rcpt.ocrData?.merchant?.value || rcpt.fileName}
-                                        </span>
-                                        <span className="receipt-thumb-amount">
-                                            {formatCurrency(rcpt.ocrData?.amount?.value || 0, currency)}
-                                        </span>
-                                        <span className="receipt-thumb-date">
-                                            {format(new Date(rcpt.createdAt), 'MMM d, yyyy')}
-                                        </span>
-                                    </div>
-                                </motion.div>
-                            ))}
+                            {receipts.map((rcpt, i) => {
+                                const receiptId = rcpt._id || `receipt-temp-${i}`;
+                                return (
+                                    <motion.div
+                                        key={receiptId}
+                                        className="receipt-thumb"
+                                        initial={{ opacity: 0, scale: 0.9 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        transition={{ delay: i * 0.05 }}
+                                        onClick={() => setLightbox(rcpt)}
+                                    >
+                                        <img
+                                            src={receiptImageUrl(rcpt)}
+                                            alt={rcpt.fileName}
+                                            onError={handleImageError}
+                                        />
+                                        <div className="receipt-thumb-overlay">
+                                            <span className="receipt-thumb-merchant">
+                                                {rcpt.ocrData?.merchant?.value || rcpt.fileName}
+                                            </span>
+                                            <span className="receipt-thumb-amount">
+                                                {formatCurrency(rcpt.ocrData?.amount?.value || 0, currency)}
+                                            </span>
+                                            <span className="receipt-thumb-date">
+                                                {rcpt.createdAt ? format(new Date(rcpt.createdAt), 'MMM d, yyyy') : 'Just now'}
+                                            </span>
+                                        </div>
+                                    </motion.div>
+                                );
+                            })}
                         </div>
                     )}
                 </motion.div>
@@ -163,13 +197,14 @@ export default function ReceiptsPage() {
                                 src={receiptImageUrl(lightbox)}
                                 alt={lightbox.fileName}
                                 className="lightbox-img"
+                                onError={handleImageError}
                             />
                             <div className="lightbox-info">
                                 <span>
-                                    <strong>{lightbox.ocrData?.merchant?.value}</strong>
+                                    <strong>{lightbox.ocrData?.merchant?.value || lightbox.fileName}</strong>
                                 </span>
                                 <span>{formatCurrency(lightbox.ocrData?.amount?.value || 0, currency)}</span>
-                                <span>{format(new Date(lightbox.createdAt), 'MMM d, yyyy')}</span>
+                                <span>{lightbox.createdAt ? format(new Date(lightbox.createdAt), 'MMM d, yyyy') : 'Just now'}</span>
                             </div>
                         </motion.div>
                     </motion.div>
@@ -178,3 +213,4 @@ export default function ReceiptsPage() {
         </div>
     );
 }
+
