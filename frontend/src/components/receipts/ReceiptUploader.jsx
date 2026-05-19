@@ -4,7 +4,7 @@ import { Upload, Loader, CheckCircle, AlertTriangle, X, Save } from 'lucide-reac
 import Button from '../ui/Button';
 import Dropdown from '../ui/Dropdown';
 import { CATEGORIES } from '../ui/CategoryBadge';
-import { receiptsAPI } from '../../utils/api';
+import { receiptsAPI, accountsAPI } from '../../utils/api';
 import { formatCurrency } from '../../utils/currency';
 import './ReceiptUploader.css';
 
@@ -32,7 +32,25 @@ export default function ReceiptUploader({ onSaveExpense }) {
     const [receipt, setReceipt] = useState(null);
     const [scanError, setScanError] = useState('');
     const [editedData, setEditedData] = useState({});
+    const [accounts, setAccounts] = useState([]);
+    const [loadingAccounts, setLoadingAccounts] = useState(false);
+    const [errors, setErrors] = useState({});
     const inputRef = useRef(null);
+
+    useEffect(() => {
+        async function fetchAccounts() {
+            setLoadingAccounts(true);
+            try {
+                const res = await accountsAPI.list();
+                setAccounts(res.data.accounts || []);
+            } catch (err) {
+                console.error('Failed to load accounts for receipt linking:', err);
+            } finally {
+                setLoadingAccounts(false);
+            }
+        }
+        fetchAccounts();
+    }, []);
 
     useEffect(() => () => {
         if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -49,6 +67,7 @@ export default function ReceiptUploader({ onSaveExpense }) {
         setReceipt(null);
         setScanError('');
         setScanning(true);
+        setErrors({});
 
         try {
             const formData = new FormData();
@@ -56,6 +75,8 @@ export default function ReceiptUploader({ onSaveExpense }) {
             const res = await receiptsAPI.scan(formData);
             const scannedReceipt = res.data.receipt;
             const result = scannedReceipt.ocrData || {};
+            const defaultAccountId = accounts.length > 0 ? accounts[0]._id : '';
+
             setReceipt(scannedReceipt);
             setOcrResult(result);
             setEditedData({
@@ -63,13 +84,14 @@ export default function ReceiptUploader({ onSaveExpense }) {
                 date: result.date?.value || new Date().toISOString().slice(0, 10),
                 merchant: result.merchant?.value || '',
                 category: result.suggestedCategory || 'other',
+                accountId: defaultAccountId,
             });
         } catch (err) {
             setScanError(err.response?.data?.message || 'Receipt scan failed');
         } finally {
             setScanning(false);
         }
-    }, []);
+    }, [accounts]);
 
     const handleDrop = useCallback((e) => {
         e.preventDefault();
@@ -101,16 +123,37 @@ export default function ReceiptUploader({ onSaveExpense }) {
         setScanError('');
         setEditedData({});
         setScanning(false);
+        setErrors({});
         if (inputRef.current) inputRef.current.value = '';
     }
 
     async function handleSave() {
         if (!receipt) return;
+
+        const errs = {};
+        if (!editedData.amount || parseFloat(editedData.amount) <= 0) {
+            errs.amount = 'Enter a valid amount';
+        }
+        if (!editedData.merchant?.trim()) {
+            errs.merchant = 'Merchant is required';
+        }
+        if (!editedData.accountId) {
+            errs.accountId = 'Payment account is required';
+        }
+
+        if (Object.keys(errs).length > 0) {
+            setErrors(errs);
+            return;
+        }
+        setErrors({});
+
         const expenseData = {
             amount: parseFloat(editedData.amount),
-            merchant: editedData.merchant,
+            merchant: editedData.merchant.trim(),
             category: editedData.category,
             date: new Date(editedData.date).toISOString(),
+            accountId: editedData.accountId,
+            fromAccountId: editedData.accountId,
             notes: '',
         };
         try {
@@ -271,6 +314,32 @@ export default function ReceiptUploader({ onSaveExpense }) {
                                         value={editedData.category}
                                         onChange={val => setEditedData(p => ({ ...p, category: val }))}
                                     />
+                                </div>
+                            </motion.div>
+
+                            {/* Account Selector */}
+                            <motion.div
+                                className="ocr-field"
+                                initial={{ opacity: 0, x: -20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ delay: 0.5 }}
+                            >
+                                <div className="ocr-field-info" style={{ width: '100%' }}>
+                                    <span className="ocr-field-label">Payment Account</span>
+                                    <Dropdown
+                                        options={accounts.map(acc => ({
+                                            value: acc._id,
+                                            label: `${acc.name} (${acc.type.replace('_', ' ')})`
+                                        }))}
+                                        value={editedData.accountId || ''}
+                                        onChange={val => setEditedData(p => ({ ...p, accountId: val }))}
+                                        placeholder="Select account"
+                                    />
+                                    {errors.accountId && (
+                                        <span className="input-error" style={{ display: 'block', marginTop: '4px', fontSize: '0.8rem', color: 'var(--danger)' }}>
+                                            {errors.accountId}
+                                        </span>
+                                    )}
                                 </div>
                             </motion.div>
                         </div>

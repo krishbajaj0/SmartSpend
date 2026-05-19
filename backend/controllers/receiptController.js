@@ -112,7 +112,7 @@ export async function linkExpense(req, res, next) {
         session = await startTransactionIfSupported();
 
         const amount = req.body.amount || receipt.ocrData?.amount?.value || 0;
-        let fromAccountId = req.body.fromAccountId;
+        let fromAccountId = req.body.fromAccountId || req.body.accountId;
         
         if (!fromAccountId) {
             fromAccountId = await getOrCreateMigratedBalanceAccount(req.user._id, session);
