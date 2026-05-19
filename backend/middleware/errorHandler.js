@@ -66,6 +66,9 @@ export function errorHandler(err, req, res, _next) {
     res.status(statusCode).json({
         success: false,
         message,
+        // Forward structured OTP metadata so the frontend can update UI state directly
+        ...(err.attemptsRemaining !== undefined && { attemptsRemaining: err.attemptsRemaining }),
+        ...(err.secondsLeft      !== undefined && { secondsLeft:       err.secondsLeft      }),
         ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
     });
 }

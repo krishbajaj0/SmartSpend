@@ -153,10 +153,12 @@ async function atomicVerifyOtp(email, purpose, submittedOtp, req, extraSelect = 
     if (failDoc) {
         const remaining = 5 - failDoc.attempts;
         await logOtpAttempt(req, email, `verify_${purpose}_otp`, false, 'invalid_otp');
-        throw new AppError(
+        const err = new AppError(
             `Invalid OTP. ${remaining} attempt${remaining !== 1 ? 's' : ''} remaining.`,
             400
         );
+        err.attemptsRemaining = remaining;
+        throw err;
     }
 
     // No active OTP document found at all: expired, locked, or wrong email.
@@ -208,15 +210,20 @@ export async function register(req, res, next) {
         await logOtpAttempt(req, email, 'request_register_otp', true);
 
         // Send verification email instantly in background (non-blocking)
+        let otpSent = true;
         sendOtpEmail(user.email, plainOtp).catch((emailErr) => {
             console.error(`⚠️ [Auth Controller] Initial OTP email failed for ${user.email}:`, emailErr.message);
+            otpSent = false;
         });
 
+        // NOTE: Do NOT return user or issue auth cookies here.
+        // The user is unverified. Auth state is only established after verifyOtp().
         return res.status(201).json({
-            success: true,
-            message: 'Registration successful. An OTP verification code has been sent to your email.',
-            user:    publicUser(user),
-            isVerified: false,
+            success:              true,
+            requiresVerification: true,
+            otpSent:              otpSent,
+            email:                user.email,
+            message:              'Registration successful. Please verify your email with the 6-digit code we sent.',
         });
     } catch (err) {
         if (res.headersSent) return;
@@ -295,7 +302,9 @@ export async function requestLoginOtp(req, res, next) {
         if (existingOtp && existingOtp.lastSentAt && (now - existingOtp.lastSentAt) < 60000) {
             const secondsLeft = Math.ceil((60000 - (now - existingOtp.lastSentAt)) / 1000);
             await logOtpAttempt(req, email, 'request_login_otp', false, 'cooldown_active');
-            throw new AppError(`Please wait ${secondsLeft} second(s) before requesting another OTP.`, 429);
+            const err = new AppError(`Please wait ${secondsLeft} second(s) before requesting another OTP.`, 429);
+            err.secondsLeft = secondsLeft;
+            throw err;
         }
 
         const plainOtp = generateOtp();
@@ -420,7 +429,9 @@ export async function forgotPassword(req, res, next) {
         if (existingOtp && existingOtp.lastSentAt && (now - existingOtp.lastSentAt) < 60000) {
             const secondsLeft = Math.ceil((60000 - (now - existingOtp.lastSentAt)) / 1000);
             await logOtpAttempt(req, user.email, 'forgot_password_otp', false, 'cooldown_active');
-            throw new AppError(`Please wait ${secondsLeft} second(s) before requesting another OTP.`, 429);
+            const err = new AppError(`Please wait ${secondsLeft} second(s) before requesting another OTP.`, 429);
+            err.secondsLeft = secondsLeft;
+            throw err;
         }
 
         const plainOtp = generateOtp();
@@ -529,7 +540,9 @@ export async function resendOtp(req, res, next) {
         if (existingOtp && existingOtp.lastSentAt && (now - existingOtp.lastSentAt) < 60000) {
             const secondsLeft = Math.ceil((60000 - (now - existingOtp.lastSentAt)) / 1000);
             await logOtpAttempt(req, email, 'resend_otp', false, 'cooldown_active');
-            throw new AppError(`Please wait ${secondsLeft} second(s) before requesting another OTP.`, 429);
+            const err = new AppError(`Please wait ${secondsLeft} second(s) before requesting another OTP.`, 429);
+            err.secondsLeft = secondsLeft;
+            throw err;
         }
 
         const plainOtp = generateOtp();

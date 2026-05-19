@@ -94,6 +94,8 @@ export default function RegisterPage() {
             navigate('/dashboard');
         } catch (err) {
             error(err.response?.data?.message || 'Verification failed');
+            // Re-throw so OTPVerification component can read attemptsRemaining
+            throw err;
         } finally {
             setLoading(false);
         }
@@ -280,6 +282,7 @@ export default function RegisterPage() {
             {showOtp && (
                 <OTPVerification
                     email={email}
+                    purpose="register"
                     onVerify={handleVerifyOtp}
                     onResend={handleResendOtp}
                     onCancel={() => setShowOtp(false)}

@@ -48,14 +48,11 @@ export function AuthProvider({ children }) {
 
     const register = useCallback(async (name, email, password) => {
         const res = await authAPI.register({ name, email, password });
-        const { user: u } = res.data;
-        if (u) {
-            setUser(u);
-            initSocket();
-        }
+        // Do NOT set user state here — the user is unverified.
+        // Auth state (setUser + socket) is established only in verifyOtp()
+        // after OTP confirmation and cookie issuance.
         return res.data;
-
-    }, [initSocket]);
+    }, []);
 
     const verifyOtp = useCallback(async (email, otp) => {
         const res = await authAPI.verifyOtp({ email, otp });

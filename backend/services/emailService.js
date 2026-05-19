@@ -211,6 +211,8 @@ function getDarkBrandedTemplate(title, preheader, bodyContent, otpText = '', foo
   </style>
 </head>
 <body>
+  <!-- Hidden preheader text for Gmail/Outlook inbox preview -->
+  <div style="display:none;font-size:1px;color:#0b111e;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;">${preheader}&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;</div>
   <div class="wrapper">
     <div class="container">
       <div class="header">
