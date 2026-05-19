@@ -38,7 +38,6 @@ export default function TransactionModal({ isOpen, onClose, onSubmit, transactio
     const [loading, setLoading] = useState(false);
     
     const [accounts, setAccounts] = useState([]);
-    const [loadingAccounts, setLoadingAccounts] = useState(false);
 
     useEffect(() => {
         if (isOpen) {
@@ -65,14 +64,11 @@ export default function TransactionModal({ isOpen, onClose, onSubmit, transactio
     }, [isOpen, transaction, user]);
 
     async function fetchAccounts() {
-        setLoadingAccounts(true);
         try {
             const res = await accountsAPI.list();
             setAccounts(res.data.accounts || []);
         } catch (err) {
             console.error(err);
-        } finally {
-            setLoadingAccounts(false);
         }
     }
 

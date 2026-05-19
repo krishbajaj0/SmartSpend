@@ -25,7 +25,9 @@ export default function ChatPanel({ onClose }) {
                     return parsed.messages || [];
                 }
             }
-        } catch { }
+        } catch (err) {
+            console.warn('Failed to load chat history:', err);
+        }
         return [];
     });
     
@@ -35,7 +37,9 @@ export default function ChatPanel({ onClose }) {
         try {
             const saved = localStorage.getItem(STORAGE_KEY);
             if (saved) return JSON.parse(saved).conversationState || null;
-        } catch { }
+        } catch (err) {
+            console.warn('Failed to parse conversation state:', err);
+        }
         return null;
     });
 
@@ -43,7 +47,9 @@ export default function ChatPanel({ onClose }) {
         try {
             const saved = localStorage.getItem(STORAGE_KEY);
             if (saved) return JSON.parse(saved).sessionId || null;
-        } catch { }
+        } catch (err) {
+            console.warn('Failed to parse sessionId:', err);
+        }
         return null;
     });
     
@@ -60,7 +66,9 @@ export default function ChatPanel({ onClose }) {
                     lastUpdated: Date.now(),
                 }));
             }
-        } catch { }
+        } catch (err) {
+            console.warn('Failed to save chat state:', err);
+        }
     }, [messages, conversationState, sessionId]);
 
     // Auto-scroll on new messages

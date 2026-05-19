@@ -90,7 +90,7 @@ export default function AnalyticsPage() {
             console.error("Analytics load failed:", err);
         }
         setLoading(false);
-    }, [addToast, currency]);
+    }, [addToast]);
 
     useEffect(() => {
         loadAnalytics();

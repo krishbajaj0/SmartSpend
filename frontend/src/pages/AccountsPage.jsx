@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Plus, Wallet, Building2, CreditCard, Trash2, Edit2 } from 'lucide-react';
 import GlassCard from '../components/ui/GlassCard';
 import Button from '../components/ui/Button';
@@ -20,28 +20,28 @@ export default function AccountsPage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingAccount, setEditingAccount] = useState(null);
 
-    async function fetchAccounts() {
+    const fetchAccounts = useCallback(async () => {
         try {
             setLoading(true);
             const res = await accountsAPI.list();
             setAccounts(res.data.accounts);
             setNetWorth(res.data.netWorth);
-        } catch (err) {
+        } catch {
             addToast('Failed to load accounts', { type: 'error' });
         } finally {
             setLoading(false);
         }
-    }
+    }, [addToast]);
 
     useEffect(() => {
         fetchAccounts();
-    }, []);
+    }, [fetchAccounts]);
 
     useEffect(() => {
         const handler = () => fetchAccounts();
         window.addEventListener('expenseUpdated', handler);
         return () => window.removeEventListener('expenseUpdated', handler);
-    }, []);
+    }, [fetchAccounts]);
 
     async function handleAddAccount(data) {
         await accountsAPI.create(data);
@@ -64,7 +64,7 @@ export default function AccountsPage() {
             fetchAccounts();
             addToast('Account deleted', { type: 'success' });
             window.dispatchEvent(new Event('expenseUpdated'));
-        } catch (err) {
+        } catch {
             addToast('Failed to delete account', { type: 'error' });
         }
     }

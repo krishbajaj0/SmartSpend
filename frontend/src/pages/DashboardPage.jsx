@@ -15,7 +15,7 @@ import {
 import SmartSearch from '../components/dashboard/SmartSearch';
 import { useAuth } from '../context/AuthContext';
 import { dashboardAPI } from '../utils/api';
-import { formatCurrency, getCurrencySymbol } from '../utils/currency';
+import { getCurrencySymbol } from '../utils/currency';
 import { normalizeCategory } from '../utils/categoryNormalization';
 import './DashboardPage.css';
 
@@ -68,35 +68,6 @@ function QuickActions() {
 }
 
 /* ── Helpers ─────────────────────────────────────────────── */
-
-function getGreetingAndInsight(summary, previousWeekTotal, currency) {
-    const hour = new Date().getHours();
-    let greeting;
-    if (hour < 12) greeting = 'Good morning';
-    else if (hour < 17) greeting = 'Good afternoon';
-    else greeting = 'Good evening';
-
-    const currentTotal = summary?.totalSpent || 0;
-    const previousTotal = previousWeekTotal || 0;
-    let insight = '';
-
-    if (previousTotal > 0) {
-        const changePercent = ((currentTotal - previousTotal) / previousTotal) * 100;
-        if (changePercent < 0) {
-            insight = `You spent ${Math.abs(changePercent).toFixed(0)}% less than last week.`;
-        } else if (changePercent > 0) {
-            insight = `You spent ${changePercent.toFixed(0)}% more than last week.`;
-        } else {
-            insight = 'Your spending is about the same as last week.';
-        }
-    } else if (currentTotal > 0) {
-        insight = '';
-    } else {
-        insight = 'Start tracking your expenses to get insights.';
-    }
-
-    return { greeting, insight };
-}
 
 function LoadingSkeleton() {
     return (
@@ -217,22 +188,6 @@ export default function DashboardPage() {
             return { date: key, label: format(day, 'MMM d'), amount: Math.round(dayMap[key] || 0) };
         });
     }, [recentTransactions, trendDays]);
-
-    const previousWeekTotal = useMemo(() => {
-        const now = new Date();
-        const thisWeekStart = subDays(now, 7);
-        const lastWeekStart = subDays(now, 14);
-        return recentTransactions
-            .filter(e => { 
-                const d = new Date(e.date); 
-                return e.type === 'EXPENSE' && d >= lastWeekStart && d < thisWeekStart; 
-            })
-            .reduce((sum, e) => sum + (e.amount || 0), 0);
-    }, [recentTransactions]);
-
-    const greetingData = useMemo(() => getGreetingAndInsight(summary, previousWeekTotal, currency), [summary, previousWeekTotal, currency]);
-
-    const totalSavings = useMemo(() => Math.max(0, overallBudgetLimit - (summary.totalSpent || 0)), [summary.totalSpent, overallBudgetLimit]);
 
     const categoryDataWithPercent = useMemo(() => {
         const total = categoryData.reduce((s, c) => s + c.value, 0);

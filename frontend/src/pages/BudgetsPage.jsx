@@ -34,7 +34,6 @@ export default function BudgetsPage() {
     const [addBudgetOpen, setAddBudgetOpen] = useState(false);
     const [newBudget, setNewBudget] = useState({ category: '', limitAmount: '', customCategory: '' });
     const [transferAnim, setTransferAnim] = useState(null);
-    const [overallCustomAmount, setOverallCustomAmount] = useState(0);
     const { addToast } = useToast();
 
     // Fetch data
@@ -62,13 +61,6 @@ export default function BudgetsPage() {
         }
         load();
     }, []);
-
-    useEffect(() => {
-        const overall = budgetData.find(b => b.category === 'overall');
-        if (overall) {
-            setOverallCustomAmount(overall.limit || 0);
-        }
-    }, [budgetData]);
 
     async function updateBudgetLimit(category, newLimit) {
         const normCat = normalizeCategory(category);

@@ -33,21 +33,17 @@ export default function ReceiptUploader({ onSaveExpense }) {
     const [scanError, setScanError] = useState('');
     const [editedData, setEditedData] = useState({});
     const [accounts, setAccounts] = useState([]);
-    const [loadingAccounts, setLoadingAccounts] = useState(false);
     const [errors, setErrors] = useState({});
     const [saving, setSaving] = useState(false);
     const inputRef = useRef(null);
 
     useEffect(() => {
         async function fetchAccounts() {
-            setLoadingAccounts(true);
             try {
                 const res = await accountsAPI.list();
                 setAccounts(res.data.accounts || []);
             } catch (err) {
                 console.error('Failed to load accounts for receipt linking:', err);
-            } finally {
-                setLoadingAccounts(false);
             }
         }
         fetchAccounts();

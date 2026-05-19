@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
     BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer,
@@ -104,6 +105,12 @@ function ChatChart({ chart }) {
 }
 
 export default function ResponseRenderer({ response, meta, onSuggestionClick }) {
+    const generatedTime = useMemo(() => {
+        if (!meta) return '';
+        const d = meta.generatedAt ? new Date(meta.generatedAt) : new Date();
+        return d.toLocaleTimeString();
+    }, [meta]);
+
     if (!response) return null;
 
     // Helper to format text with basic markdown (bold)
@@ -157,7 +164,7 @@ export default function ResponseRenderer({ response, meta, onSuggestionClick }) 
             {meta?.source && (
                 <div className="ai-attribution" style={{ fontSize: '0.65rem', color: 'var(--text-tertiary)', marginTop: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <Info size={10} />
-                    <span>Data provided by {meta.source.split('/').pop()} at {new Date(meta.generatedAt || Date.now()).toLocaleTimeString()}</span>
+                    <span>Data provided by {meta.source.split('/').pop()} at {generatedTime}</span>
                 </div>
             )}
         </div>
