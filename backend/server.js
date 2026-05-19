@@ -271,6 +271,14 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));  // Ctrl-C / dev mode
     // reach the next line we are guaranteed to have a live DB connection.
     await connectDB();
 
+    // Warm up the email transporter connection pool
+    try {
+        const { warmupTransporter } = await import('./services/emailService.js');
+        warmupTransporter();
+    } catch (warmupErr) {
+        logger.error('⚠️ [Bootstrap] Failed to warm up SMTP transporter:', warmupErr.message);
+    }
+
     // Attach Socket.io AFTER confirming the DB is live (sockets may emit DB events).
     initSocket(server);
 

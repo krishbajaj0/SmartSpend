@@ -36,9 +36,10 @@ import crypto from 'crypto';
  * @returns {string} 64-char hex HMAC digest
  */
 export function hashOtp(otp) {
+    const secret = process.env.OTP_HMAC_SECRET || process.env.OTP_SECRET || 'fallback-secret-at-least-32-chars-long';
     return crypto
-        .createHmac('sha256', process.env.OTP_HMAC_SECRET)
-        .update(String(otp))
+        .createHash('sha256')
+        .update(String(otp) + secret)
         .digest('hex');
 }
 

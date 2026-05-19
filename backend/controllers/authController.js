@@ -119,6 +119,17 @@ async function atomicVerifyOtp(email, submittedOtp, extraSelect = '') {
     const hashedOtp = hashOtp(submittedOtp);
     const now       = new Date();
 
+    // Check if verification is currently locked
+    const lockedUser = await User.findOne({
+        email,
+        otpLockUntil: { $gt: now }
+    }).maxTimeMS(DB_TIMEOUT);
+
+    if (lockedUser) {
+        const minutesLeft = Math.ceil((lockedUser.otpLockUntil - now) / 60000);
+        throw new AppError(`Verification is locked due to too many failed attempts. Please try again in ${minutesLeft} minute(s).`, 429);
+    }
+
     // ── SINGLE ATOMIC OPERATION: match + clear ────────────────────────────────
     // The filter includes the hashed OTP value directly.
     // If MongoDB finds a document matching ALL conditions, it atomically:
@@ -132,7 +143,7 @@ async function atomicVerifyOtp(email, submittedOtp, extraSelect = '') {
             otpAttempts: { $lt: 5 },              // not locked out
         },
         {
-            $unset: { otp: '', otpExpire: '', otpAttempts: '' },
+            $unset: { otp: '', otpExpire: '', otpAttempts: '', lastOtpSentAt: '', otpLockUntil: '' },
         },
         {
             new:    true,
@@ -164,13 +175,18 @@ async function atomicVerifyOtp(email, submittedOtp, extraSelect = '') {
     ).maxTimeMS(DB_TIMEOUT);
 
     if (failDoc && failDoc.otpAttempts >= 5) {
-        // This increment just reached the limit — clear the OTP so it can't
-        // be retried further and give a specific lockout message.
+        // This increment just reached the limit — clear the OTP and lock verification for 15 minutes
         await User.findByIdAndUpdate(
             failDoc._id,
-            { $unset: { otp: '', otpExpire: '' }, $set: { otpAttempts: 0 } }
+            { 
+                $unset: { otp: '', otpExpire: '' }, 
+                $set: { 
+                    otpAttempts: 0,
+                    otpLockUntil: new Date(Date.now() + 15 * 60 * 1000)
+                } 
+            }
         ).maxTimeMS(DB_TIMEOUT);
-        throw new AppError('Too many failed attempts. Please request a new OTP.', 429);
+        throw new AppError('Too many failed attempts. Verification is locked for 15 minutes.', 429);
     }
 
     if (failDoc) {
@@ -195,24 +211,29 @@ export async function register(req, res, next) {
             return res.status(409).json({ success: false, message: 'Email already registered' });
         }
 
-        // Temporarily set isVerified: true to fully bypass SMTP verification in production
+        const plainOtp = generateOtp();
+
         const user = await User.create({
             name,
             email,
             passwordHash: password,
-            otp:          null,
-            otpExpire:    null,
+            otp:          hashOtp(plainOtp),
+            otpExpire:    new Date(Date.now() + 5 * 60 * 1000), // 5 minutes expiry
             otpAttempts:  0,
-            isVerified:   true,
+            lastOtpSentAt: new Date(),
+            isVerified:   false,
         });
 
-        // Issue session token cookies directly upon successful signup
-        issueSession(res, user);
+        // Send verification email instantly in background (non-blocking for registration latency)
+        sendOtpEmail(user.email, plainOtp).catch((emailErr) => {
+            console.error(`⚠️ [Auth Controller] Initial OTP email failed for ${user.email}:`, emailErr.message);
+        });
 
         return res.status(201).json({
             success: true,
-            message: 'Registration successful.',
+            message: 'Registration successful. An OTP verification code has been sent to your email.',
             user:    publicUser(user),
+            isVerified: false,
         });
     } catch (err) {
         if (res.headersSent) return;
@@ -287,14 +308,29 @@ export async function requestLoginOtp(req, res, next) {
             throw new AppError('Please verify your email first', 403);
         }
 
+        const now = new Date();
+
+        // 1. Check if verification is currently locked (15 minutes lockout)
+        if (user.otpLockUntil && user.otpLockUntil > now) {
+            const minutesLeft = Math.ceil((user.otpLockUntil - now) / 60000);
+            throw new AppError(`Verification is locked due to too many failed attempts. Please try again in ${minutesLeft} minute(s).`, 429);
+        }
+
+        // 2. Enforce 60-second resend cooldown
+        if (user.lastOtpSentAt && (now - user.lastOtpSentAt) < 60000) {
+            const secondsLeft = Math.ceil((60000 - (now - user.lastOtpSentAt)) / 1000);
+            throw new AppError(`Please wait ${secondsLeft} second(s) before requesting another OTP.`, 429);
+        }
+
         const plainOtp = generateOtp();
         await User.findByIdAndUpdate(
             user._id,
             {
                 $set: {
-                    otp:         hashOtp(plainOtp),
-                    otpExpire:   new Date(Date.now() + 10 * 60 * 1000),
-                    otpAttempts: 0,
+                    otp:           hashOtp(plainOtp),
+                    otpExpire:     new Date(Date.now() + 5 * 60 * 1000), // 5 minutes expiry
+                    otpAttempts:   0,
+                    lastOtpSentAt: now,
                 },
             }
         ).maxTimeMS(DB_TIMEOUT);
@@ -404,14 +440,29 @@ export async function forgotPassword(req, res, next) {
 
         if (!user) return res.json(successResponse);
 
+        const now = new Date();
+
+        // 1. Check if verification is currently locked (15 minutes lockout)
+        if (user.otpLockUntil && user.otpLockUntil > now) {
+            const minutesLeft = Math.ceil((user.otpLockUntil - now) / 60000);
+            throw new AppError(`Verification is locked due to too many failed attempts. Please try again in ${minutesLeft} minute(s).`, 429);
+        }
+
+        // 2. Enforce 60-second resend cooldown
+        if (user.lastOtpSentAt && (now - user.lastOtpSentAt) < 60000) {
+            const secondsLeft = Math.ceil((60000 - (now - user.lastOtpSentAt)) / 1000);
+            throw new AppError(`Please wait ${secondsLeft} second(s) before requesting another OTP.`, 429);
+        }
+
         const plainOtp = generateOtp();
         await User.findByIdAndUpdate(
             user._id,
             {
                 $set: {
-                    otp:         hashOtp(plainOtp),
-                    otpExpire:   new Date(Date.now() + 10 * 60 * 1000),
-                    otpAttempts: 0,
+                    otp:           hashOtp(plainOtp),
+                    otpExpire:     new Date(Date.now() + 5 * 60 * 1000), // 5 minutes expiry
+                    otpAttempts:   0,
+                    lastOtpSentAt: now,
                 },
             }
         ).maxTimeMS(DB_TIMEOUT);
@@ -502,14 +553,29 @@ export async function resendOtp(req, res, next) {
         const user = await User.findOne({ email }).maxTimeMS(DB_TIMEOUT);
         if (!user) throw new AppError('User not found', 404);
 
+        const now = new Date();
+
+        // 1. Check if verification is currently locked (15 minutes lockout)
+        if (user.otpLockUntil && user.otpLockUntil > now) {
+            const minutesLeft = Math.ceil((user.otpLockUntil - now) / 60000);
+            throw new AppError(`Verification is locked due to too many failed attempts. Please try again in ${minutesLeft} minute(s).`, 429);
+        }
+
+        // 2. Enforce 60-second resend cooldown
+        if (user.lastOtpSentAt && (now - user.lastOtpSentAt) < 60000) {
+            const secondsLeft = Math.ceil((60000 - (now - user.lastOtpSentAt)) / 1000);
+            throw new AppError(`Please wait ${secondsLeft} second(s) before requesting another OTP.`, 429);
+        }
+
         const plainOtp = generateOtp();
         await User.findByIdAndUpdate(
             user._id,
             {
                 $set: {
-                    otp:         hashOtp(plainOtp),
-                    otpExpire:   new Date(Date.now() + 10 * 60 * 1000),
-                    otpAttempts: 0,   // reset counter on resend
+                    otp:           hashOtp(plainOtp),
+                    otpExpire:     new Date(Date.now() + 5 * 60 * 1000), // 5 minutes expiry
+                    otpAttempts:   0,   // reset counter on resend
+                    lastOtpSentAt: now,
                 },
             }
         ).maxTimeMS(DB_TIMEOUT);

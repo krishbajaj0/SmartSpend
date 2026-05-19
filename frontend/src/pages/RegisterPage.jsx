@@ -71,12 +71,13 @@ export default function RegisterPage() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (loading) return;
         if (!validateStep2()) return;
         setLoading(true);
         try {
             await register(name, email, password);
-            success('Account created successfully!');
-            navigate('/dashboard');
+            success('Account created! Please check your inbox for the OTP verification code.');
+            setShowOtp(true);
         } catch (err) {
             setErrors({ email: err.response?.data?.message || 'Registration failed' });
         } finally {
@@ -85,9 +86,11 @@ export default function RegisterPage() {
     };
 
     const handleVerifyOtp = async (otpValue) => {
+        if (loading) return;
         setLoading(true);
         try {
             await verifyOtp(email, otpValue);
+            success('Email verified successfully!');
             navigate('/dashboard');
         } catch (err) {
             error(err.response?.data?.message || 'Verification failed');
@@ -97,6 +100,7 @@ export default function RegisterPage() {
     };
 
     const handleResendOtp = async () => {
+        if (loading) return;
         try {
             await resendOtp(email);
             success('OTP resent successfully');

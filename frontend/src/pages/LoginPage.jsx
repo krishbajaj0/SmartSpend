@@ -55,6 +55,7 @@ export default function LoginPage() {
     // ── Password Login ──
     const handlePasswordSubmit = async (e) => {
         e.preventDefault();
+        if (loading) return;
         if (!validatePassword()) return;
         setLoading(true);
         try {
@@ -76,6 +77,7 @@ export default function LoginPage() {
     // ── OTP: Request Code ──
     const handleRequestOtp = async (e) => {
         e.preventDefault();
+        if (loading) return;
         if (!validateEmail()) return;
         setLoading(true);
         try {
@@ -101,6 +103,7 @@ export default function LoginPage() {
 
     // ── OTP: Verify Code ──
     const handleVerifyOtp = async (otpCode) => {
+        if (loading) return;
         setLoading(true);
         try {
             await loginWithOtp(email, otpCode);
@@ -118,6 +121,7 @@ export default function LoginPage() {
 
     // ── OTP: Resend ──
     const handleResendOtp = async () => {
+        if (loading) return;
         if (resendTimer > 0) return;
         setLoading(true);
         try {

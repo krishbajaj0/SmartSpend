@@ -3,10 +3,55 @@ import constants from '../config/constants.js';
 
 let transporter = null;
 
+// Track recent email sends to prevent duplicate sends within 10 seconds (in-memory cache)
+const recentSends = new Map();
+
+/**
+ * Check if the email send request is a duplicate (same target and subject/type within 10s)
+ * @param {string} email 
+ * @param {string} subject 
+ * @returns {boolean}
+ */
+function isDuplicateSend(email, subject) {
+    const key = `${email}:${subject}`;
+    const now = Date.now();
+    const lastSend = recentSends.get(key);
+    
+    if (lastSend && now - lastSend < 10000) {
+        return true;
+    }
+    recentSends.set(key, now);
+    
+    // Perform lazy cleanup of older entries to keep memory low
+    if (recentSends.size > 200) {
+        for (const [k, ts] of recentSends.entries()) {
+            if (now - ts > 10000) {
+                recentSends.delete(k);
+            }
+        }
+    }
+    return false;
+}
+
+/**
+ * Initialize and return the Nodemailer transporter with connection pooling and keep-alive.
+ */
 function getTransporter() {
     if (!transporter) {
         const isGmail = constants.smtp.host === 'smtp.gmail.com' || !constants.smtp.host;
+        
+        console.log(`🔌 [Email Service] Initializing connection pool for SMTP: ${constants.smtp.host}`);
+        
         transporter = nodemailer.createTransport({
+            pool: true,
+            maxConnections: 5,
+            maxMessages: 100,
+            rateDelta: 1000,
+            rateLimit: 5,
+            keepAlive: true,
+            connectionTimeout: 5000,
+            socketTimeout: 5000,
+            greetingTimeout: 5000,
             ...(isGmail ? { service: 'gmail' } : {
                 host: constants.smtp.host,
                 port: constants.smtp.port,
@@ -21,9 +66,186 @@ function getTransporter() {
     return transporter;
 }
 
-export const sendEmail = async ({ email, subject, message, html }) => {
-    // If SMTP credentials are not provided, log the email and return success
+/**
+ * Warm up the SMTP transporter connection pool during boot to prevent cold starts on Render.
+ */
+export const warmupTransporter = () => {
+    // If credentials are not configured, skip verification to prevent startup crash
     if (!constants.smtp.email || !constants.smtp.password) {
+        console.log('⚠️ [Email Service] SMTP not configured. Warmup skipped.');
+        return;
+    }
+    try {
+        const t = getTransporter();
+        if (t && typeof t.verify === 'function') {
+            t.verify((error, success) => {
+                if (error) {
+                    console.error('⚠️ [Email Service] SMTP transporter verification failed on warmup:', error.message);
+                } else {
+                    console.log('🚀 [Email Service] SMTP Transporter pool warmed up and ready for real-time delivery.');
+                }
+            });
+        }
+    } catch (err) {
+        console.error('⚠️ [Email Service] Exception during SMTP warmup:', err.message);
+    }
+};
+
+/**
+ * Helper to wrap dark branded layout around HTML content
+ */
+function getDarkBrandedTemplate(title, preheader, bodyContent, otpText = '', footerNote = '') {
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${title}</title>
+  <style>
+    body {
+      background-color: #0b111e;
+      color: #f3f4f6;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
+    }
+    .wrapper {
+      background-color: #05070c;
+      padding: 40px 20px;
+    }
+    .container {
+      background-color: #0b111e;
+      color: #f3f4f6;
+      border-radius: 16px;
+      max-width: 500px;
+      margin: 0 auto;
+      border: 1px solid #1f2937;
+      box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3);
+      overflow: hidden;
+    }
+    .header {
+      background: linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%);
+      padding: 30px 20px;
+      text-align: center;
+      border-bottom: 1px solid #1f2937;
+    }
+    .brand-icon {
+      font-size: 40px;
+      margin-bottom: 10px;
+      display: inline-block;
+    }
+    .brand-title {
+      color: #ffffff;
+      font-size: 26px;
+      font-weight: 800;
+      margin: 0;
+      letter-spacing: -0.5px;
+    }
+    .brand-title span {
+      background: linear-gradient(135deg, #a78bfa 0%, #6366f1 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      color: #a78bfa;
+    }
+    .content {
+      padding: 35px 25px;
+      text-align: center;
+    }
+    .title {
+      color: #ffffff;
+      font-size: 20px;
+      font-weight: 700;
+      margin-top: 0;
+      margin-bottom: 15px;
+    }
+    .description {
+      color: #9ca3af;
+      font-size: 14px;
+      line-height: 1.6;
+      margin-bottom: 30px;
+    }
+    .otp-box {
+      background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
+      border: 1px solid #4338ca;
+      border-radius: 12px;
+      padding: 18px;
+      font-size: 38px;
+      font-weight: 800;
+      letter-spacing: 8px;
+      color: #a78bfa;
+      margin: 0 auto 30px auto;
+      max-width: 280px;
+      box-shadow: 0 0 15px rgba(99, 102, 241, 0.25);
+    }
+    .expiry {
+      color: #ef4444;
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 0;
+      background-color: rgba(239, 68, 68, 0.1);
+      display: inline-block;
+      padding: 6px 12px;
+      border-radius: 20px;
+      border: 1px solid rgba(239, 68, 68, 0.2);
+    }
+    .footer {
+      text-align: center;
+      padding: 30px 20px;
+      color: #6b7280;
+      font-size: 11px;
+      line-height: 1.6;
+      background-color: #080d17;
+      border-top: 1px solid #1f2937;
+    }
+    .footer p {
+      margin: 0 0 10px 0;
+    }
+    .footer p:last-child {
+      margin: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="container">
+      <div class="header">
+        <span class="brand-icon">💰</span>
+        <h1 class="brand-title"><span>SmartSpend</span></h1>
+      </div>
+      <div class="content">
+        <h2 class="title">${title}</h2>
+        <p class="description">${bodyContent}</p>
+        ${otpText ? `<div class="otp-box">${otpText}</div>` : ''}
+        ${footerNote ? `<p class="expiry">⚠️ ${footerNote}</p>` : ''}
+      </div>
+      <div class="footer">
+        <p>If you did not request this email, please ignore it.</p>
+        <p>© 2026 SmartSpend. All rights reserved.</p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+`;
+}
+
+/**
+ * Robust email sending engine with pooled retries, duplicate prevention, and Resend API fallback.
+ */
+export const sendEmail = async ({ email, subject, message, html }) => {
+    // 1. Prevent duplicate sends within 10s
+    if (isDuplicateSend(email, subject)) {
+        console.warn(`🛑 [Email Service] Duplicate send prevented for ${email} with subject: "${subject}"`);
+        return true;
+    }
+
+    // 2. Check if SMTP is configured
+    const hasSmtp = !!(constants.smtp.email && constants.smtp.password);
+    const hasResend = !!process.env.RESEND_API_KEY;
+
+    if (!hasSmtp && !hasResend) {
         if (process.env.NODE_ENV === 'test' && process.env.ALLOW_DEBUG_OTP === 'true') {
             console.log('--- MOCK EMAIL START ---');
             console.log(`To: ${email}`);
@@ -32,74 +254,121 @@ export const sendEmail = async ({ email, subject, message, html }) => {
             console.log('--- MOCK EMAIL END ---');
             return true;
         }
-        throw new Error('SMTP is not configured');
+        throw new Error('SMTP and Resend API are not configured');
     }
 
     const mailOptions = {
-        from: `SmartExpense <${constants.smtp.email}>`,
+        from: `SmartSpend <${constants.smtp.email || 'noreply@smartspend.dev'}>`,
         to: email,
         subject,
         text: message,
         html,
     };
 
-    try {
-        const info = await getTransporter().sendMail(mailOptions);
-        console.log(`✅ Email sent successfully to ${email} (messageId: ${info.messageId})`);
-    } catch (err) {
-        console.error(`❌ Failed to send email to ${email}:`, err.message);
-        throw err;
+    // ── Attempt 1: SMTP Connection Pool with Retries ─────────────────────────
+    if (hasSmtp) {
+        let attempts = 0;
+        const maxAttempts = 3;
+        
+        while (attempts < maxAttempts) {
+            try {
+                const info = await getTransporter().sendMail(mailOptions);
+                console.log(`✅ [Email Service] SMTP sent to ${email} on attempt ${attempts + 1} (msgId: ${info.messageId})`);
+                return true;
+            } catch (err) {
+                attempts++;
+                console.warn(`⚠️ [Email Service] SMTP attempt ${attempts} failed to ${email}: ${err.message}`);
+                
+                if (attempts < maxAttempts) {
+                    const delay = attempts * 750; // Exponential backoff delay
+                    await new Promise(r => setTimeout(r, delay));
+                }
+            }
+        }
     }
+
+    // ── Attempt 2: Fallback to Resend API ────────────────────────────────────
+    if (hasResend) {
+        console.log(`🔄 [Email Service] Attempting Resend API fallback for ${email}...`);
+        try {
+            const res = await fetch('https://api.resend.com/emails', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+                },
+                body: JSON.stringify({
+                    from: 'SmartSpend <onboarding@resend.dev>',
+                    to: [email],
+                    subject,
+                    html,
+                    text: message,
+                }),
+            });
+            
+            if (res.ok) {
+                const data = await res.json();
+                console.log(`✅ [Email Service] Resend fallback success to ${email} (id: ${data.id})`);
+                return true;
+            }
+            
+            const errData = await res.json();
+            console.error(`❌ [Email Service] Resend fallback failed:`, errData);
+        } catch (resErr) {
+            console.error(`❌ [Email Service] Resend fallback error:`, resErr.message);
+        }
+    }
+
+    // If both failed
+    throw new Error('Failed to deliver email through SMTP and Resend fallback');
 };
 
+/**
+ * Send a secure, branded 6-digit OTP verification email for registration.
+ */
 export const sendOtpEmail = async (email, otp) => {
-    const subject = 'Your SmartExpense Verification Code';
-    const message = `Your verification code is: ${otp}. It will expire in 10 minutes.`;
-    const html = `
-        <div style="font-family: sans-serif; padding: 20px; color: #333;">
-            <h2 style="color: #6366f1;">SmartExpense Verification</h2>
-            <p>Your verification code is:</p>
-            <div style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #4338ca; padding: 10px 0;">
-                ${otp}
-            </div>
-            <p>This code will expire in 10 minutes.</p>
-            <p>If you didn't request this, please ignore this email.</p>
-        </div>
-    `;
+    const subject = 'Your SmartSpend Verification Code';
+    const message = `Your verification code is: ${otp}. It will expire in 5 minutes.`;
+    const html = getDarkBrandedTemplate(
+        'Verify Your Account',
+        'Use this code to verify your SmartSpend account.',
+        'Welcome to SmartSpend! Please verify your email using the secure 6-digit code below to unlock your financial dashboard.',
+        otp,
+        'This code will expire in 5 minutes.'
+    );
 
     await sendEmail({ email, subject, message, html });
 };
 
+/**
+ * Send a secure, branded 6-digit OTP verification email for login.
+ */
 export const sendLoginOtpEmail = async (email, otp) => {
-    const subject = 'Your SmartExpense Login Code';
-    const message = `Your login code is: ${otp}. It will expire in 10 minutes.`;
-    const html = `
-        <div style="font-family: sans-serif; padding: 20px; color: #333;">
-            <h2 style="color: #6366f1;">SmartExpense Login</h2>
-            <p>Your one-time login code is:</p>
-            <div style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #4338ca; padding: 10px 0;">
-                ${otp}
-            </div>
-            <p>This code will expire in 10 minutes.</p>
-            <p>If you didn't request this, please ignore this email.</p>
-        </div>
-    `;
+    const subject = 'Your SmartSpend Login Code';
+    const message = `Your login code is: ${otp}. It will expire in 5 minutes.`;
+    const html = getDarkBrandedTemplate(
+        'Verify Your Login',
+        'Use this code to log into your SmartSpend account.',
+        'Use the secure 6-digit passcode below to sign into your SmartSpend account instantly — no password required.',
+        otp,
+        'This code will expire in 5 minutes.'
+    );
 
     await sendEmail({ email, subject, message, html });
 };
 
+/**
+ * Send transaction alerts and budget threshold warning notifications.
+ */
 export const sendNotificationEmail = async (email, name, title, textContent) => {
-    const subject = `SmartExpense Alert: ${title}`;
-    const html = `
-        <div style="font-family: sans-serif; padding: 20px; color: #333;">
-            <p style="font-size: 16px;">Hi ${name},</p>
-            <h2 style="color: #6366f1;">${title}</h2>
-            <p style="font-size: 16px; background: #fff2f2; padding: 15px; border-left: 4px solid #ef4444;">
-                ${textContent}
-            </p>
-            <p>You can adjust your alert preferences in your SmartExpense account settings.</p>
-        </div>
-    `;
+    const subject = `SmartSpend Alert: ${title}`;
+    const html = getDarkBrandedTemplate(
+        title,
+        `SmartSpend Alert: ${title}`,
+        `Hi ${name},<br/><br/>${textContent}`,
+        '',
+        'You can configure these notifications in your SmartSpend settings.'
+    );
 
     await sendEmail({ email, subject, message: textContent, html });
 };

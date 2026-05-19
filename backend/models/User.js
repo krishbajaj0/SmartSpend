@@ -74,6 +74,8 @@ const userSchema = new mongoose.Schema(
         otp:         String,
         otpExpire:   Date,
         otpAttempts: { type: Number, default: 0, min: 0 },
+        lastOtpSentAt: Date,
+        otpLockUntil: Date,
 
         isVerified:  { type: Boolean, default: false },
         lastLoginAt: Date,
@@ -95,6 +97,8 @@ const userSchema = new mongoose.Schema(
                 delete ret.otp;
                 delete ret.otpExpire;
                 delete ret.otpAttempts;
+                delete ret.lastOtpSentAt;
+                delete ret.otpLockUntil;
                 delete ret.resetPasswordToken;
                 delete ret.resetPasswordExpire;
                 delete ret.tokenVersion;   // Never expose the revocation counter
