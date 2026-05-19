@@ -70,13 +70,6 @@ const userSchema = new mongoose.Schema(
         resetPasswordToken:  String,
         resetPasswordExpire: Date,
 
-        // OTP authentication — otp is stored as HMAC-SHA256 hash (see utils/otp.js)
-        otp:         String,
-        otpExpire:   Date,
-        otpAttempts: { type: Number, default: 0, min: 0 },
-        lastOtpSentAt: Date,
-        otpLockUntil: Date,
-
         isVerified:  { type: Boolean, default: false },
         lastLoginAt: Date,
 
@@ -94,11 +87,6 @@ const userSchema = new mongoose.Schema(
         toJSON: {
             transform(_doc, ret) {
                 delete ret.passwordHash;
-                delete ret.otp;
-                delete ret.otpExpire;
-                delete ret.otpAttempts;
-                delete ret.lastOtpSentAt;
-                delete ret.otpLockUntil;
                 delete ret.resetPasswordToken;
                 delete ret.resetPasswordExpire;
                 delete ret.tokenVersion;   // Never expose the revocation counter

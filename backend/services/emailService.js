@@ -1,19 +1,25 @@
 import nodemailer from 'nodemailer';
 import constants from '../config/constants.js';
+import EmailDeliveryMetric from '../models/EmailDeliveryMetric.js';
 
 let transporter = null;
 
 // Track recent email sends to prevent duplicate sends within 10 seconds (in-memory cache)
 const recentSends = new Map();
 
+// Provider failure circuit breaker state
+let resendConsecutiveFailures = 0;
+let resendCircuitOpenUntil = null;
+
 /**
- * Check if the email send request is a duplicate (same target and subject/type within 10s)
+ * Check if the email send request is a duplicate (same target and purpose/subject within 10s)
  * @param {string} email 
+ * @param {string} purpose 
  * @param {string} subject 
  * @returns {boolean}
  */
-function isDuplicateSend(email, subject) {
-    const key = `${email}:${subject}`;
+function isDuplicateSend(email, purpose, subject) {
+    const key = purpose ? `${email}:${purpose}` : `${email}:${subject}`;
     const now = Date.now();
     const lastSend = recentSends.get(key);
     
@@ -46,12 +52,10 @@ function getTransporter() {
             pool: true,
             maxConnections: 5,
             maxMessages: 100,
-            rateDelta: 1000,
             rateLimit: 5,
             keepAlive: true,
             connectionTimeout: 5000,
             socketTimeout: 5000,
-            greetingTimeout: 5000,
             ...(isGmail ? { service: 'gmail' } : {
                 host: constants.smtp.host,
                 port: constants.smtp.port,
@@ -70,7 +74,6 @@ function getTransporter() {
  * Warm up the SMTP transporter connection pool during boot to prevent cold starts on Render.
  */
 export const warmupTransporter = () => {
-    // If credentials are not configured, skip verification to prevent startup crash
     if (!constants.smtp.email || !constants.smtp.password) {
         console.log('⚠️ [Email Service] SMTP not configured. Warmup skipped.');
         return;
@@ -232,95 +235,143 @@ function getDarkBrandedTemplate(title, preheader, bodyContent, otpText = '', foo
 }
 
 /**
- * Robust email sending engine with pooled retries, duplicate prevention, and Resend API fallback.
+ * Robust email sending engine with Resend Priority, Circuit Breaker, and pooled SMTP fallback.
  */
-export const sendEmail = async ({ email, subject, message, html }) => {
-    // 1. Prevent duplicate sends within 10s
-    if (isDuplicateSend(email, subject)) {
-        console.warn(`🛑 [Email Service] Duplicate send prevented for ${email} with subject: "${subject}"`);
+export const sendEmail = async ({ email, subject, message, html, purpose }) => {
+    const startTime = performance.now();
+    let success = false;
+    let provider = 'mock';
+    let retryCount = 0;
+    let deliveryError = null;
+
+    // 1. Prevent duplicate sends within 10s based on email + purpose
+    if (isDuplicateSend(email, purpose, subject)) {
+        console.warn(`🛑 [Email Service] Duplicate send prevented for ${email} with purpose/subject: "${purpose || subject}"`);
         return true;
     }
 
-    // 2. Check if SMTP is configured
-    const hasSmtp = !!(constants.smtp.email && constants.smtp.password);
-    const hasResend = !!process.env.RESEND_API_KEY;
+    try {
+        const hasSmtp = !!(constants.smtp.email && constants.smtp.password);
+        const hasResend = !!process.env.RESEND_API_KEY;
 
-    if (!hasSmtp && !hasResend) {
-        if (process.env.NODE_ENV === 'test' && process.env.ALLOW_DEBUG_OTP === 'true') {
-            console.log('--- MOCK EMAIL START ---');
-            console.log(`To: ${email}`);
-            console.log(`Subject: ${subject}`);
-            console.log(`Message: ${message}`);
-            console.log('--- MOCK EMAIL END ---');
-            return true;
-        }
-        throw new Error('SMTP and Resend API are not configured');
-    }
-
-    const mailOptions = {
-        from: `SmartSpend <${constants.smtp.email || 'noreply@smartspend.dev'}>`,
-        to: email,
-        subject,
-        text: message,
-        html,
-    };
-
-    // ── Attempt 1: SMTP Connection Pool with Retries ─────────────────────────
-    if (hasSmtp) {
-        let attempts = 0;
-        const maxAttempts = 3;
-        
-        while (attempts < maxAttempts) {
-            try {
-                const info = await getTransporter().sendMail(mailOptions);
-                console.log(`✅ [Email Service] SMTP sent to ${email} on attempt ${attempts + 1} (msgId: ${info.messageId})`);
+        if (!hasSmtp && !hasResend) {
+            if (process.env.NODE_ENV === 'test' && process.env.ALLOW_DEBUG_OTP === 'true') {
+                console.log('--- MOCK EMAIL START ---');
+                console.log(`To: ${email}`);
+                console.log(`Subject: ${subject}`);
+                console.log(`Message: ${message}`);
+                console.log('--- MOCK EMAIL END ---');
+                success = true;
+                provider = 'mock';
                 return true;
-            } catch (err) {
-                attempts++;
-                console.warn(`⚠️ [Email Service] SMTP attempt ${attempts} failed to ${email}: ${err.message}`);
+            }
+            throw new Error('SMTP and Resend API are not configured');
+        }
+
+        // 2. Try Resend API (unless Circuit Breaker is active or Resend is not configured)
+        const isResendCircuitOpen = resendCircuitOpenUntil && Date.now() < resendCircuitOpenUntil;
+        if (hasResend && !isResendCircuitOpen) {
+            provider = 'resend';
+            try {
+                const res = await fetch('https://api.resend.com/emails', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+                    },
+                    body: JSON.stringify({
+                        from: 'SmartSpend <onboarding@resend.dev>',
+                        to: [email],
+                        subject,
+                        html,
+                        text: message,
+                    }),
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    console.log(`✅ [Email Service] Resend sent to ${email} (id: ${data.id})`);
+                    success = true;
+                    resendConsecutiveFailures = 0;
+                    resendCircuitOpenUntil = null;
+                    return true;
+                } else {
+                    const errData = await res.json().catch(() => ({}));
+                    throw new Error(JSON.stringify(errData) || `HTTP error ${res.status}`);
+                }
+            } catch (resErr) {
+                resendConsecutiveFailures++;
+                console.warn(`⚠️ [Email Service] Resend attempt failed (Consecutive: ${resendConsecutiveFailures}): ${resErr.message}`);
                 
-                if (attempts < maxAttempts) {
-                    const delay = attempts * 750; // Exponential backoff delay
-                    await new Promise(r => setTimeout(r, delay));
+                if (resendConsecutiveFailures >= 5) {
+                    resendCircuitOpenUntil = Date.now() + 5 * 60 * 1000;
+                    console.error(`🚨 [Email Service] Resend circuit breaker opened! Bypassing Resend for 5 minutes.`);
+                }
+                
+                if (!hasSmtp) {
+                    throw resErr;
+                }
+                console.log(`🔄 [Email Service] Resend failed. Falling back to Gmail SMTP...`);
+            }
+        }
+
+        // 3. Fallback to Gmail SMTP connection pool with exponential backoff retries
+        if (hasSmtp && !success) {
+            provider = 'gmail_smtp';
+            const mailOptions = {
+                from: `SmartSpend <${constants.smtp.email || 'noreply@smartspend.dev'}>`,
+                to: email,
+                subject,
+                text: message,
+                html,
+            };
+
+            let attempts = 0;
+            const maxAttempts = 3;
+            
+            while (attempts < maxAttempts) {
+                try {
+                    const info = await getTransporter().sendMail(mailOptions);
+                    console.log(`✅ [Email Service] SMTP sent to ${email} on attempt ${attempts + 1} (msgId: ${info.messageId})`);
+                    success = true;
+                    retryCount = attempts;
+                    return true;
+                } catch (err) {
+                    attempts++;
+                    retryCount = attempts;
+                    console.warn(`⚠️ [Email Service] SMTP attempt ${attempts} failed to ${email}: ${err.message}`);
+                    
+                    if (attempts < maxAttempts) {
+                        const delay = attempts * 750; // Exponential backoff delay
+                        await new Promise(r => setTimeout(r, delay));
+                    } else {
+                        throw err;
+                    }
                 }
             }
         }
-    }
 
-    // ── Attempt 2: Fallback to Resend API ────────────────────────────────────
-    if (hasResend) {
-        console.log(`🔄 [Email Service] Attempting Resend API fallback for ${email}...`);
-        try {
-            const res = await fetch('https://api.resend.com/emails', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
-                },
-                body: JSON.stringify({
-                    from: 'SmartSpend <onboarding@resend.dev>',
-                    to: [email],
-                    subject,
-                    html,
-                    text: message,
-                }),
-            });
-            
-            if (res.ok) {
-                const data = await res.json();
-                console.log(`✅ [Email Service] Resend fallback success to ${email} (id: ${data.id})`);
-                return true;
-            }
-            
-            const errData = await res.json();
-            console.error(`❌ [Email Service] Resend fallback failed:`, errData);
-        } catch (resErr) {
-            console.error(`❌ [Email Service] Resend fallback error:`, resErr.message);
+        if (!success) {
+            throw new Error('Failed to deliver email through all configured channels');
         }
+    } catch (err) {
+        deliveryError = err.message;
+        throw err;
+    } finally {
+        const latencyMs = Math.round(performance.now() - startTime);
+        // Persist delivery metrics asynchronously to prevent performance overhead
+        EmailDeliveryMetric.create({
+            email,
+            subject,
+            success,
+            retryCount,
+            provider,
+            latencyMs,
+            error: deliveryError
+        }).catch(metricErr => {
+            console.error('⚠️ [Email Service] Failed to save delivery metric:', metricErr.message);
+        });
     }
-
-    // If both failed
-    throw new Error('Failed to deliver email through SMTP and Resend fallback');
 };
 
 /**
@@ -337,7 +388,7 @@ export const sendOtpEmail = async (email, otp) => {
         'This code will expire in 5 minutes.'
     );
 
-    await sendEmail({ email, subject, message, html });
+    await sendEmail({ email, subject, message, html, purpose: 'register' });
 };
 
 /**
@@ -354,7 +405,7 @@ export const sendLoginOtpEmail = async (email, otp) => {
         'This code will expire in 5 minutes.'
     );
 
-    await sendEmail({ email, subject, message, html });
+    await sendEmail({ email, subject, message, html, purpose: 'login' });
 };
 
 /**

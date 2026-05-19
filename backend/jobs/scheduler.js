@@ -255,9 +255,9 @@ export function initCronJobs() {
         }
     }));
 
-    // ── Daily (2:00 AM): Clean up unverified stale users after 24h & clear expired OTPs ──
+    // ── Daily (2:00 AM): Clean up unverified stale users after 24h ──
     cron.schedule('0 2 * * *', () => runWithJobLock('cleanup-unverified-stale-users', async () => {
-        console.log('⏰ Running unverified stale users & expired OTPs cleanup job...');
+        console.log('⏰ Running unverified stale users cleanup job...');
         try {
             const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
             
@@ -267,15 +267,9 @@ export function initCronJobs() {
                 createdAt: { $lt: twentyFourHoursAgo }
             });
 
-            // Nullify/unset expired OTPs to keep documents clean
-            const updatedOtps = await User.updateMany(
-                { otpExpire: { $lt: new Date() } },
-                { $unset: { otp: '', otpExpire: '', otpAttempts: '' } }
-            );
-
-            console.log(`✅ Cleaned up ${deletedUsers.deletedCount} unverified stale users and cleared expired OTPs for ${updatedOtps.modifiedCount} accounts.`);
+            console.log(`✅ Cleaned up ${deletedUsers.deletedCount} unverified stale users.`);
         } catch (err) {
-            console.error('❌ Stale user/OTP cleanup job error:', err.message);
+            console.error('❌ Stale user cleanup job error:', err.message);
         }
     }));
 

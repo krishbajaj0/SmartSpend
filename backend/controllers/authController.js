@@ -1,43 +1,13 @@
 /**
  * @file controllers/authController.js
  *
- * Phase 1 hardening applied:
- *  - OTP stored as HMAC-SHA256 hash (utils/otp.js)
- *  - JWT revocation via tokenVersion (utils/token.js)
- *
- * Phase 2 hardening applied:
- *
- *  ATOMIC OTP VERIFICATION (P1-1)
- *  ────────────────────────────────
- *  The original read-then-write pattern:
- *    1. findOne(email, otpExpire: { $gt: now })   ← read
- *    2. check attempts in JS
- *    3. user.save()                                ← write
- *
- *  has a TOCTOU race: two concurrent requests both pass step 1 before
- *  either completes step 3. Both increment from the same base, bypassing
- *  the 5-attempt lockout.
- *
- *  Fixed pattern — every verification function now:
- *    1. findOneAndUpdate({ email, otpExpire > now, otpAttempts < 5 },
- *                        { $inc: { otpAttempts: 1 } }, { new: true })
- *       → atomic: increments the counter OR returns null (no match).
- *       → if null: either expired, max attempts reached, or wrong email.
- *    2. verifyOtp(candidateOtp, user.otp) in application code.
- *    3. On success: findOneAndUpdate({ _id }, { $unset: OTP fields }).
- *       → clears the OTP in one atomic write; no second findOne needed.
- *
- *  No two concurrent requests can both succeed step 1 because MongoDB's
- *  document-level locking guarantees the findOneAndUpdate is serialised.
- *
- *  QUERY TIMEOUT (P1-2)
- *  ─────────────────────
- *  All DB operations use .maxTimeMS(10_000) to prevent queries from
- *  holding connections indefinitely when MongoDB is under load.
+ * Fully decoupled OTP architecture, security auditing, and delivery telemetry suite.
  */
 
 import crypto from 'crypto';
 import User from '../models/User.js';
+import OtpVerification from '../models/OtpVerification.js';
+import OtpAttemptAudit from '../models/OtpAttemptAudit.js';
 import { AppError } from '../middleware/errorHandler.js';
 import logger from '../config/logger.js';
 import { hashOtp } from '../utils/otp.js';
@@ -47,24 +17,16 @@ import { invalidateUserCache } from '../middleware/auth.js';
 import { clearAuthCookies, issueAuthCookies } from '../utils/authCookies.js';
 import { disconnectUserSockets } from '../services/socketService.js';
 
-// ── DB query timeout (ms) applied to all auth queries ──────────────────────────
-// Set lower than the global HTTP timeout (30 s) so we get a clean DB error
-// before the HTTP layer times out and destroys the socket.
 const DB_TIMEOUT = 10_000;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// HELPERS
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Generate a cryptographically secure 6-digit OTP string. */
 function generateOtp() {
     return crypto.randomInt(100000, 999999).toString();
 }
 
-/**
- * Build the standard public user shape returned in auth responses.
- * Keeps response payloads consistent across all endpoints.
- */
+/** Build the standard public user shape returned in auth responses. */
 function publicUser(user) {
     return {
         id:       user._id,
@@ -79,118 +41,118 @@ function issueSession(res, user) {
     issueAuthCookies(res, signToken(user));
 }
 
+/** Parse client telemetry details and log secure security audits. */
+async function logOtpAttempt(req, email, action, success, reason = null) {
+    const ip = req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown';
+    const userAgent = req.headers['user-agent'] || '';
+    
+    let device = 'Desktop';
+    if (/mobile/i.test(userAgent)) device = 'Mobile';
+    else if (/tablet/i.test(userAgent)) device = 'Tablet';
+
+    try {
+        await OtpAttemptAudit.create({
+            email,
+            action,
+            success,
+            reason,
+            ip,
+            userAgent,
+            device,
+            country: 'unknown'
+        });
+    } catch (err) {
+        console.error('⚠️ [Auth Controller] Failed to log OTP attempt audit:', err.message);
+    }
+}
+
 /**
- * Fully atomic OTP verification — verify AND consume in ONE MongoDB operation.
- *
- * WHY THE PHASE 2 APPROACH STILL HAD A RACE
- * ──────────────────────────────────────────
- * Phase 2 used findOneAndUpdate to increment the attempt counter atomically,
- * then verified the hash in JS, then cleared the OTP in a second write.
- * The race window: between the $inc write and the JS hash check, TWO concurrent
- * requests with the *same valid OTP* can both pass the filter (both have
- * attempts < 5), both get the document, both run verifyOtpHash() → true, and
- * both proceed to "OTP is valid" — consuming the same OTP twice.
- *
- * THE FIX — SINGLE OPERATION
- * ──────────────────────────
- * The OTP hash is computed in JS (necessary — MongoDB cannot run HMAC), then
- * passed directly into the findOneAndUpdate FILTER:
- *
- *   filter: { email, otp: hashedValue, otpExpire > now, otpAttempts < limit }
- *   update: { $unset OTP fields, $set lastLoginAt (if applicable) }
- *
- * If this returns a document: the OTP matched AND was cleared atomically.
- * If it returns null: either expired, wrong hash, locked, or not found.
- * No second request can match the same OTP because the $unset fires in the
- * same operation — there is NO window between match and consume.
- *
- * ON FAILURE (null returned):
- * We do a second targeted $inc to bump the attempt counter. This is NOT
- * a race issue on the failure path because we only care about monotonically
- * incrementing the counter — concurrent failures both increment safely.
+ * Fully atomic OTP verification — verify AND consume in ONE MongoDB operation on the OtpVerification model.
  *
  * @param {string} email        - User email
+ * @param {string} purpose      - The specific OTP purpose ('register', 'login', 'forgot_password')
  * @param {string} submittedOtp - Plaintext OTP from request body
+ * @param {Object} req          - Express req object for audit log extraction
  * @param {string} extraSelect  - Additional Mongoose select fields (e.g. '+tokenVersion')
  * @returns {Document} Matched and consumed user document
  * @throws {AppError} 400/429 on invalid/expired/locked OTP
  */
-async function atomicVerifyOtp(email, submittedOtp, extraSelect = '') {
+async function atomicVerifyOtp(email, purpose, submittedOtp, req, extraSelect = '') {
     const hashedOtp = hashOtp(submittedOtp);
     const now       = new Date();
 
     // Check if verification is currently locked
-    const lockedUser = await User.findOne({
+    const lockedOtp = await OtpVerification.findOne({
         email,
-        otpLockUntil: { $gt: now }
+        purpose,
+        lockUntil: { $gt: now }
     }).maxTimeMS(DB_TIMEOUT);
 
-    if (lockedUser) {
-        const minutesLeft = Math.ceil((lockedUser.otpLockUntil - now) / 60000);
+    if (lockedOtp) {
+        const minutesLeft = Math.ceil((lockedOtp.lockUntil - now) / 60000);
+        await logOtpAttempt(req, email, `verify_${purpose}_otp`, false, 'locked_out');
         throw new AppError(`Verification is locked due to too many failed attempts. Please try again in ${minutesLeft} minute(s).`, 429);
     }
 
     // ── SINGLE ATOMIC OPERATION: match + clear ────────────────────────────────
     // The filter includes the hashed OTP value directly.
-    // If MongoDB finds a document matching ALL conditions, it atomically:
-    //   1. Unsets otp, otpExpire, otpAttempts (consumed — cannot be reused)
-    // No two concurrent requests can both succeed this operation for the same OTP.
-    const user = await User.findOneAndUpdate(
-        {
-            email,
-            otp:         hashedOtp,               // hash match inside DB — never in JS
-            otpExpire:   { $gt: now },             // not expired
-            otpAttempts: { $lt: 5 },              // not locked out
-        },
-        {
-            $unset: { otp: '', otpExpire: '', otpAttempts: '', lastOtpSentAt: '', otpLockUntil: '' },
-        },
-        {
-            new:    true,
-            select: extraSelect.trim() || undefined,
-        }
-    ).maxTimeMS(DB_TIMEOUT);
+    // If MongoDB finds a document matching ALL conditions, it atomically deletes the OTP document.
+    const verification = await OtpVerification.findOneAndDelete({
+        email,
+        purpose,
+        otpHash:     hashedOtp,               // hash match inside DB
+        expiresAt:   { $gt: now },            // not expired
+        attempts:    { $lt: 5 },              // not locked out
+    }).maxTimeMS(DB_TIMEOUT);
 
-    if (user) {
+    if (verification) {
         // Match succeeded — OTP was valid and is now consumed.
+        // Fetch and return the corresponding User
+        const user = await User.findOne({ email }).select(extraSelect.trim() || undefined).maxTimeMS(DB_TIMEOUT);
+        if (!user) {
+            await logOtpAttempt(req, email, `verify_${purpose}_otp`, false, 'user_not_found');
+            throw new AppError('Associated user not found.', 404);
+        }
+        await logOtpAttempt(req, email, `verify_${purpose}_otp`, true);
         return user;
     }
 
     // ── MATCH FAILED — determine why and update attempt counter ───────────────
-    // We need to increment the attempt counter on the CORRECT document
-    // (the one with this email and a still-valid OTP), but only if it exists
-    // and isn't already locked. We do NOT need to know why it failed here —
-    // the user-facing message is intentionally generic to prevent enumeration.
-    const failDoc = await User.findOneAndUpdate(
+    const failDoc = await OtpVerification.findOneAndUpdate(
         {
             email,
-            otpExpire:   { $gt: now },     // still has an active (non-expired) OTP
-            otpAttempts: { $lt: 5 },       // not yet fully locked
+            purpose,
+            expiresAt: { $gt: now },     // still has an active (non-expired) OTP
+            attempts:  { $lt: 5 },       // not yet fully locked
         },
-        { $inc: { otpAttempts: 1 } },
+        { $inc: { attempts: 1 } },
         {
             new:    true,
-            select: '+otpAttempts',
+            select: '+attempts',
         }
     ).maxTimeMS(DB_TIMEOUT);
 
-    if (failDoc && failDoc.otpAttempts >= 5) {
-        // This increment just reached the limit — clear the OTP and lock verification for 15 minutes
-        await User.findByIdAndUpdate(
+    if (failDoc && failDoc.attempts >= 5) {
+        // Lock verification for 15 minutes by setting lockUntil and updating expiresAt
+        const lockUntil = new Date(Date.now() + 15 * 60 * 1000);
+        await OtpVerification.findByIdAndUpdate(
             failDoc._id,
             { 
-                $unset: { otp: '', otpExpire: '' }, 
                 $set: { 
-                    otpAttempts: 0,
-                    otpLockUntil: new Date(Date.now() + 15 * 60 * 1000)
-                } 
+                    attempts: 0,
+                    lockUntil: lockUntil,
+                    expiresAt: lockUntil // Extend collection TTL dynamic index
+                },
+                $unset: { otpHash: '' } // Delete sensitive OTP hash component
             }
         ).maxTimeMS(DB_TIMEOUT);
+        await logOtpAttempt(req, email, `verify_${purpose}_otp`, false, 'lockout_triggered');
         throw new AppError('Too many failed attempts. Verification is locked for 15 minutes.', 429);
     }
 
     if (failDoc) {
-        const remaining = 5 - failDoc.otpAttempts;
+        const remaining = 5 - failDoc.attempts;
+        await logOtpAttempt(req, email, `verify_${purpose}_otp`, false, 'invalid_otp');
         throw new AppError(
             `Invalid OTP. ${remaining} attempt${remaining !== 1 ? 's' : ''} remaining.`,
             400
@@ -198,10 +160,12 @@ async function atomicVerifyOtp(email, submittedOtp, extraSelect = '') {
     }
 
     // No active OTP document found at all: expired, locked, or wrong email.
+    await logOtpAttempt(req, email, `verify_${purpose}_otp`, false, 'invalid_or_expired');
     throw new AppError('Invalid or expired OTP.', 400);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Controllers ──────────────────────────────────────────────────────────────
+
 export async function register(req, res, next) {
     try {
         const { name, email, password } = req.body;
@@ -212,19 +176,38 @@ export async function register(req, res, next) {
         }
 
         const plainOtp = generateOtp();
+        const now = new Date();
+        const expiresAt = new Date(now.getTime() + 5 * 60 * 1000); // 5 minutes expiry
 
         const user = await User.create({
             name,
             email,
             passwordHash: password,
-            otp:          hashOtp(plainOtp),
-            otpExpire:    new Date(Date.now() + 5 * 60 * 1000), // 5 minutes expiry
-            otpAttempts:  0,
-            lastOtpSentAt: new Date(),
             isVerified:   false,
         });
 
-        // Send verification email instantly in background (non-blocking for registration latency)
+        // Invalidate any stale registration OTP documents
+        await OtpVerification.deleteMany({ email, purpose: 'register' }).maxTimeMS(DB_TIMEOUT);
+
+        // Save ephemeral OTP details in dedicated collection conforming exactly to required schema
+        await OtpVerification.create({
+            userId: user._id,
+            email,
+            purpose: 'register',
+            otpHash: hashOtp(plainOtp),
+            attempts: 0,
+            maxAttempts: 5,
+            lastSentAt: now,
+            expiresAt,
+            verified: false,
+            ip: req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown',
+            userAgent: req.headers['user-agent'] || ''
+        });
+
+        // Log request creation security audit
+        await logOtpAttempt(req, email, 'request_register_otp', true);
+
+        // Send verification email instantly in background (non-blocking)
         sendOtpEmail(user.email, plainOtp).catch((emailErr) => {
             console.error(`⚠️ [Auth Controller] Initial OTP email failed for ${user.email}:`, emailErr.message);
         });
@@ -241,9 +224,6 @@ export async function register(req, res, next) {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// POST /api/auth/login
-// ─────────────────────────────────────────────────────────────────────────────
 export async function login(req, res, next) {
     try {
         const { email, password } = req.body;
@@ -274,18 +254,13 @@ export async function login(req, res, next) {
     } catch (err) { next(err); }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// POST /api/auth/logout
-// ─────────────────────────────────────────────────────────────────────────────
 export async function logout(req, res, next) {
     try {
-        // Atomic tokenVersion increment invalidates all current sessions for this user.
         await User.findByIdAndUpdate(
             req.user._id,
             { $inc: { tokenVersion: 1 } }
         ).maxTimeMS(DB_TIMEOUT);
         
-        // Evict cache to ensure next request goes to DB and hits new tokenVersion
         invalidateUserCache(req.user._id);
         disconnectUserSockets(req.user._id);
         clearAuthCookies(res);
@@ -294,9 +269,6 @@ export async function logout(req, res, next) {
     } catch (err) { next(err); }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// POST /api/auth/login-otp  (request login OTP)
-// ─────────────────────────────────────────────────────────────────────────────
 export async function requestLoginOtp(req, res, next) {
     try {
         const { email } = req.body;
@@ -310,30 +282,44 @@ export async function requestLoginOtp(req, res, next) {
 
         const now = new Date();
 
-        // 1. Check if verification is currently locked (15 minutes lockout)
-        if (user.otpLockUntil && user.otpLockUntil > now) {
-            const minutesLeft = Math.ceil((user.otpLockUntil - now) / 60000);
+        // 1. Check if login verification flow is currently locked out
+        const existingOtp = await OtpVerification.findOne({ email, purpose: 'login' }).maxTimeMS(DB_TIMEOUT);
+        
+        if (existingOtp && existingOtp.lockUntil && existingOtp.lockUntil > now) {
+            const minutesLeft = Math.ceil((existingOtp.lockUntil - now) / 60000);
+            await logOtpAttempt(req, email, 'request_login_otp', false, 'locked_out');
             throw new AppError(`Verification is locked due to too many failed attempts. Please try again in ${minutesLeft} minute(s).`, 429);
         }
 
-        // 2. Enforce 60-second resend cooldown
-        if (user.lastOtpSentAt && (now - user.lastOtpSentAt) < 60000) {
-            const secondsLeft = Math.ceil((60000 - (now - user.lastOtpSentAt)) / 1000);
+        // 2. Enforce 60-second resend cooldown based on lastSentAt
+        if (existingOtp && existingOtp.lastSentAt && (now - existingOtp.lastSentAt) < 60000) {
+            const secondsLeft = Math.ceil((60000 - (now - existingOtp.lastSentAt)) / 1000);
+            await logOtpAttempt(req, email, 'request_login_otp', false, 'cooldown_active');
             throw new AppError(`Please wait ${secondsLeft} second(s) before requesting another OTP.`, 429);
         }
 
         const plainOtp = generateOtp();
-        await User.findByIdAndUpdate(
-            user._id,
-            {
-                $set: {
-                    otp:           hashOtp(plainOtp),
-                    otpExpire:     new Date(Date.now() + 5 * 60 * 1000), // 5 minutes expiry
-                    otpAttempts:   0,
-                    lastOtpSentAt: now,
-                },
-            }
-        ).maxTimeMS(DB_TIMEOUT);
+        const expiresAt = new Date(now.getTime() + 5 * 60 * 1000); // 5 minutes expiry
+
+        // Invalidate old login OTP records
+        await OtpVerification.deleteMany({ email, purpose: 'login' }).maxTimeMS(DB_TIMEOUT);
+
+        // Store new login verification code
+        await OtpVerification.create({
+            userId: user._id,
+            email,
+            purpose: 'login',
+            otpHash: hashOtp(plainOtp),
+            attempts: 0,
+            maxAttempts: 5,
+            lastSentAt: now,
+            expiresAt,
+            verified: false,
+            ip: req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown',
+            userAgent: req.headers['user-agent'] || ''
+        });
+
+        await logOtpAttempt(req, email, 'request_login_otp', true);
 
         await sendLoginOtpEmail(email, plainOtp);
 
@@ -341,18 +327,12 @@ export async function requestLoginOtp(req, res, next) {
     } catch (err) { next(err); }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// POST /api/auth/verify-login-otp
-// ─────────────────────────────────────────────────────────────────────────────
 export async function verifyLoginOtp(req, res, next) {
     try {
         const { email, otp } = req.body;
 
-        // atomicVerifyOtp handles: expiry check, attempt limiting (atomic),
-        // hash verification, and OTP clearing — all in one round trip + one write.
-        const user = await atomicVerifyOtp(email, otp, '+tokenVersion');
+        const user = await atomicVerifyOtp(email, 'login', otp, req, '+tokenVersion');
 
-        // Update lastLoginAt after successful verification
         await User.findByIdAndUpdate(
             user._id,
             { $set: { lastLoginAt: new Date() } }
@@ -366,16 +346,10 @@ export async function verifyLoginOtp(req, res, next) {
     } catch (err) { next(err); }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// GET /api/auth/me
-// ─────────────────────────────────────────────────────────────────────────────
 export async function getMe(req, res) {
     res.json({ success: true, user: req.user });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PUT /api/auth/profile
-// ─────────────────────────────────────────────────────────────────────────────
 export async function updateProfile(req, res, next) {
     try {
         const allowed = [
@@ -393,9 +367,6 @@ export async function updateProfile(req, res, next) {
     } catch (err) { next(err); }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PUT /api/auth/change-password
-// ─────────────────────────────────────────────────────────────────────────────
 export async function changePassword(req, res, next) {
     try {
         const { oldPassword, newPassword } = req.body;
@@ -408,16 +379,14 @@ export async function changePassword(req, res, next) {
         if (!isMatch) throw new AppError('Current password is incorrect', 400);
 
         user.passwordHash = newPassword;
-        await user.save(); // pre-save hook hashes the new password
+        await user.save(); 
 
-        // Revoke all old sessions by incrementing tokenVersion
         const updatedUser = await User.findByIdAndUpdate(
             user._id,
             { $inc: { tokenVersion: 1 } },
             { new: true, select: '+tokenVersion' }
         ).maxTimeMS(DB_TIMEOUT);
 
-        // Evict the now-stale cache entry so the next request re-queries the DB
         invalidateUserCache(user._id);
         disconnectUserSockets(user._id);
         issueSession(res, updatedUser);
@@ -429,43 +398,53 @@ export async function changePassword(req, res, next) {
     } catch (err) { next(err); }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// POST /api/auth/forgot-password
-// ─────────────────────────────────────────────────────────────────────────────
 export async function forgotPassword(req, res, next) {
     try {
         const user = await User.findOne({ email: req.body.email }).maxTimeMS(DB_TIMEOUT);
-        // Constant-message response: never reveal whether the email exists
         const successResponse = { success: true, message: 'If that email exists, an OTP has been sent.' };
 
         if (!user) return res.json(successResponse);
 
         const now = new Date();
 
-        // 1. Check if verification is currently locked (15 minutes lockout)
-        if (user.otpLockUntil && user.otpLockUntil > now) {
-            const minutesLeft = Math.ceil((user.otpLockUntil - now) / 60000);
+        // 1. Check if forgot password verification is currently locked
+        const existingOtp = await OtpVerification.findOne({ email: user.email, purpose: 'forgot_password' }).maxTimeMS(DB_TIMEOUT);
+
+        if (existingOtp && existingOtp.lockUntil && existingOtp.lockUntil > now) {
+            const minutesLeft = Math.ceil((existingOtp.lockUntil - now) / 60000);
+            await logOtpAttempt(req, user.email, 'forgot_password_otp', false, 'locked_out');
             throw new AppError(`Verification is locked due to too many failed attempts. Please try again in ${minutesLeft} minute(s).`, 429);
         }
 
         // 2. Enforce 60-second resend cooldown
-        if (user.lastOtpSentAt && (now - user.lastOtpSentAt) < 60000) {
-            const secondsLeft = Math.ceil((60000 - (now - user.lastOtpSentAt)) / 1000);
+        if (existingOtp && existingOtp.lastSentAt && (now - existingOtp.lastSentAt) < 60000) {
+            const secondsLeft = Math.ceil((60000 - (now - existingOtp.lastSentAt)) / 1000);
+            await logOtpAttempt(req, user.email, 'forgot_password_otp', false, 'cooldown_active');
             throw new AppError(`Please wait ${secondsLeft} second(s) before requesting another OTP.`, 429);
         }
 
         const plainOtp = generateOtp();
-        await User.findByIdAndUpdate(
-            user._id,
-            {
-                $set: {
-                    otp:           hashOtp(plainOtp),
-                    otpExpire:     new Date(Date.now() + 5 * 60 * 1000), // 5 minutes expiry
-                    otpAttempts:   0,
-                    lastOtpSentAt: now,
-                },
-            }
-        ).maxTimeMS(DB_TIMEOUT);
+        const expiresAt = new Date(now.getTime() + 5 * 60 * 1000); // 5 minutes expiry
+
+        // Invalidate old forgot_password OTP records
+        await OtpVerification.deleteMany({ email: user.email, purpose: 'forgot_password' }).maxTimeMS(DB_TIMEOUT);
+
+        // Store new password reset code conforming exactly to required schema
+        await OtpVerification.create({
+            userId: user._id,
+            email: user.email,
+            purpose: 'forgot_password',
+            otpHash: hashOtp(plainOtp),
+            attempts: 0,
+            maxAttempts: 5,
+            lastSentAt: now,
+            expiresAt,
+            verified: false,
+            ip: req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown',
+            userAgent: req.headers['user-agent'] || ''
+        });
+
+        await logOtpAttempt(req, user.email, 'forgot_password_otp', true);
 
         await sendOtpEmail(user.email, plainOtp);
 
@@ -473,35 +452,25 @@ export async function forgotPassword(req, res, next) {
     } catch (err) { next(err); }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// POST /api/auth/reset-password
-// ─────────────────────────────────────────────────────────────────────────────
 export async function resetPassword(req, res, next) {
     try {
         const { email, otp, newPassword } = req.body;
 
-        // atomicVerifyOtp: same atomic pattern, no tokenVersion needed yet
-        // (we'll fetch it atomically with the password update below)
-        const user = await atomicVerifyOtp(email, otp, '');
+        const user = await atomicVerifyOtp(email, 'forgot_password', otp, req, '');
 
-        // Hash the new password and bump tokenVersion in one save sequence.
-        // We can't do this in a single findByIdAndUpdate because the pre-save
-        // hook for bcrypt runs on save() — so we use a Mongoose document.
         const fullUser = await User.findById(user._id)
             .select('+passwordHash +tokenVersion')
             .maxTimeMS(DB_TIMEOUT);
 
         fullUser.passwordHash = newPassword;
         fullUser.isVerified   = true;
-        await fullUser.save(); // bcrypt hook fires here
+        await fullUser.save(); 
 
-        // Revoke all old sessions — account recovery invalidates everything
         await User.findByIdAndUpdate(
             fullUser._id,
             { $inc: { tokenVersion: 1 } }
         ).maxTimeMS(DB_TIMEOUT);
 
-        // Evict stale cache entry
         invalidateUserCache(fullUser._id);
         disconnectUserSockets(fullUser._id);
         clearAuthCookies(res);
@@ -510,22 +479,17 @@ export async function resetPassword(req, res, next) {
     } catch (err) { next(err); }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// POST /api/auth/verify-otp  (email verification after registration)
-// ─────────────────────────────────────────────────────────────────────────────
 export async function verifyOtp(req, res, next) {
     try {
         const { email, otp } = req.body;
 
-        const user = await atomicVerifyOtp(email, otp, '+tokenVersion');
+        const user = await atomicVerifyOtp(email, 'register', otp, req, '+tokenVersion');
 
-        // Mark account as verified — one targeted update, no save() overhead
         await User.findByIdAndUpdate(
             user._id,
             { $set: { isVerified: true } }
         ).maxTimeMS(DB_TIMEOUT);
 
-        // Re-read to get clean user state for the token and response
         const verifiedUser = await User.findById(user._id)
             .select('+tokenVersion')
             .maxTimeMS(DB_TIMEOUT);
@@ -544,9 +508,6 @@ export async function verifyOtp(req, res, next) {
     } catch (err) { next(err); }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// POST /api/auth/resend-otp
-// ─────────────────────────────────────────────────────────────────────────────
 export async function resendOtp(req, res, next) {
     try {
         const { email } = req.body;
@@ -555,30 +516,44 @@ export async function resendOtp(req, res, next) {
 
         const now = new Date();
 
-        // 1. Check if verification is currently locked (15 minutes lockout)
-        if (user.otpLockUntil && user.otpLockUntil > now) {
-            const minutesLeft = Math.ceil((user.otpLockUntil - now) / 60000);
+        // Check if registration OTP flow is currently locked out
+        const existingOtp = await OtpVerification.findOne({ email, purpose: 'register' }).maxTimeMS(DB_TIMEOUT);
+
+        if (existingOtp && existingOtp.lockUntil && existingOtp.lockUntil > now) {
+            const minutesLeft = Math.ceil((existingOtp.lockUntil - now) / 60000);
+            await logOtpAttempt(req, email, 'resend_otp', false, 'locked_out');
             throw new AppError(`Verification is locked due to too many failed attempts. Please try again in ${minutesLeft} minute(s).`, 429);
         }
 
-        // 2. Enforce 60-second resend cooldown
-        if (user.lastOtpSentAt && (now - user.lastOtpSentAt) < 60000) {
-            const secondsLeft = Math.ceil((60000 - (now - user.lastOtpSentAt)) / 1000);
+        // Enforce 60-second resend cooldown
+        if (existingOtp && existingOtp.lastSentAt && (now - existingOtp.lastSentAt) < 60000) {
+            const secondsLeft = Math.ceil((60000 - (now - existingOtp.lastSentAt)) / 1000);
+            await logOtpAttempt(req, email, 'resend_otp', false, 'cooldown_active');
             throw new AppError(`Please wait ${secondsLeft} second(s) before requesting another OTP.`, 429);
         }
 
         const plainOtp = generateOtp();
-        await User.findByIdAndUpdate(
-            user._id,
-            {
-                $set: {
-                    otp:           hashOtp(plainOtp),
-                    otpExpire:     new Date(Date.now() + 5 * 60 * 1000), // 5 minutes expiry
-                    otpAttempts:   0,   // reset counter on resend
-                    lastOtpSentAt: now,
-                },
-            }
-        ).maxTimeMS(DB_TIMEOUT);
+        const expiresAt = new Date(now.getTime() + 5 * 60 * 1000); // 5 minutes expiry
+
+        // Invalidate old registration OTP records
+        await OtpVerification.deleteMany({ email, purpose: 'register' }).maxTimeMS(DB_TIMEOUT);
+
+        // Store new registration code conforming exactly to required schema
+        await OtpVerification.create({
+            userId: user._id,
+            email,
+            purpose: 'register',
+            otpHash: hashOtp(plainOtp),
+            attempts: 0,
+            maxAttempts: 5,
+            lastSentAt: now,
+            expiresAt,
+            verified: false,
+            ip: req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown',
+            userAgent: req.headers['user-agent'] || ''
+        });
+
+        await logOtpAttempt(req, email, 'resend_otp', true);
 
         await sendOtpEmail(email, plainOtp);
 
