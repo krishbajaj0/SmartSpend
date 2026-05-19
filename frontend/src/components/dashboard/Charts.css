@@ -109,16 +109,24 @@
     letter-spacing: 0.05em;
 }
 
+.donut-container {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    height: 100%;
+}
+
 .donut-legend-premium {
-    padding: 0 var(--space-lg) var(--space-lg);
+    padding: 0 var(--space-md) var(--space-md);
+    margin-top: -10px;
 }
 
 .donut-legend-item {
     display: flex;
     align-items: center;
     gap: var(--space-sm);
-    padding: 8px 0;
-    border-bottom: 1px solid var(--border-subtle);
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
 }
 
 .donut-legend-item:last-child {

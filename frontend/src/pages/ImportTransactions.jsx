@@ -5,12 +5,16 @@ import { Upload, FileSpreadsheet, CheckCircle, X, Eye } from 'lucide-react';
 import GlassCard from '../components/ui/GlassCard';
 import Button from '../components/ui/Button';
 import { useToast } from '../context/ToastContext';
+import { useAuth } from '../context/AuthContext';
 import { importAPI } from '../utils/api';
+import { formatCurrency } from '../utils/currency';
 import { CATEGORIES } from '../components/ui/CategoryBadge';
 import './ImportTransactions.css';
 
 export default function ImportTransactions() {
     const navigate = useNavigate();
+    const { user } = useAuth();
+    const currency = user?.currency || 'INR';
     const [file, setFile] = useState(null);
     const [dragover, setDragover] = useState(false);
     const [previewing, setPreviewing] = useState(false);
@@ -189,7 +193,7 @@ export default function ImportTransactions() {
                                                 <td>{i + 1}</td>
                                                 <td>{row.date}</td>
                                                 <td>{row.merchant}</td>
-                                                <td style={{ fontWeight: 600 }}>₹{row.amount.toLocaleString('en-IN')}</td>
+                                                <td style={{ fontWeight: 600 }}>{formatCurrency(row.amount, currency)}</td>
                                                 <td>{cat.icon} {cat.label}</td>
                                                 <td className={row.confidence > 0.6 ? 'confidence-high' : 'confidence-low'}>
                                                     {row.confidence > 0.6 ? '✅' : '⚠️'} {Math.round(row.confidence * 100)}%

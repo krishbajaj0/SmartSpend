@@ -4,6 +4,7 @@ import Modal from '../ui/Modal';
 import Input, { Textarea } from '../ui/Input';
 import Dropdown from '../ui/Dropdown';
 import Button from '../ui/Button';
+import { useAuth } from '../../context/AuthContext';
 import { CATEGORIES } from '../ui/CategoryBadge';
 import { format } from 'date-fns';
 import './ExpenseFormModal.css';
@@ -22,9 +23,19 @@ const emptyForm = {
     notes: '',
     tags: '',
     isRecurring: false,
+    currency: 'INR',
 };
 
+const currencyOptions = [
+    { value: 'INR', label: '₹ INR' },
+    { value: 'USD', label: '$ USD' },
+    { value: 'EUR', label: '€ EUR' },
+    { value: 'GBP', label: '£ GBP' },
+    { value: 'JPY', label: '¥ JPY' },
+];
+
 export default function ExpenseFormModal({ isOpen, onClose, onSubmit, expense = null }) {
+    const { user } = useAuth();
     const isEditing = !!expense;
     const [form, setForm] = useState(emptyForm);
     const [errors, setErrors] = useState({});
@@ -41,13 +52,14 @@ export default function ExpenseFormModal({ isOpen, onClose, onSubmit, expense = 
                     notes: expense.notes || '',
                     tags: (expense.tags || []).join(', '),
                     isRecurring: expense.isRecurring || false,
+                    currency: expense.currency || user?.currency || 'INR',
                 });
             } else {
-                setForm(emptyForm);
+                setForm({ ...emptyForm, currency: user?.currency || 'INR' });
             }
             setErrors({});
         }
-    }, [isOpen, expense]);
+    }, [isOpen, expense, user]);
 
     function validate() {
         const errs = {};
@@ -68,6 +80,7 @@ export default function ExpenseFormModal({ isOpen, onClose, onSubmit, expense = 
             amount: parseFloat(form.amount),
             merchant: form.merchant.trim(),
             category: form.category,
+            currency: form.currency,
             date: new Date(form.date).toISOString(),
             notes: form.notes.trim(),
             tags: form.tags ? form.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
@@ -111,9 +124,16 @@ export default function ExpenseFormModal({ isOpen, onClose, onSubmit, expense = 
                 )}
                 
                 {/* Amount + Category row */}
+                {/* Amount Row */}
                 <div className="expense-form-row">
-                    <div className="amount-input-wrapper">
-                        <span className="amount-prefix">₹</span>
+                    <Dropdown
+                        label="Currency"
+                        options={currencyOptions}
+                        value={form.currency}
+                        onChange={val => setField('currency', val)}
+                        placeholder="Currency"
+                    />
+                    <div className="amount-input-wrapper" style={{ flex: 2 }}>
                         <Input
                             label="Amount"
                             type="number"
@@ -125,6 +145,8 @@ export default function ExpenseFormModal({ isOpen, onClose, onSubmit, expense = 
                             step="0.01"
                         />
                     </div>
+                </div>
+                <div className="expense-form-row">
                     <Dropdown
                         label="Category"
                         options={categoryOptions}
@@ -134,7 +156,7 @@ export default function ExpenseFormModal({ isOpen, onClose, onSubmit, expense = 
                     />
                 </div>
                 {errors.category && (
-                    <span className="input-error" style={{ marginTop: '-12px' }}>{errors.category}</span>
+                    <span className="input-error" style={{ marginTop: '-12px', display: 'block' }}>{errors.category}</span>
                 )}
 
                 {/* Merchant + Date row */}

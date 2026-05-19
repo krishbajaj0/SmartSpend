@@ -4,8 +4,11 @@ import { AppError } from '../middleware/errorHandler.js';
 // POST /api/goals
 export async function createGoal(req, res, next) {
     try {
+        const { name, targetAmount, deadline } = req.body;
         const goal = await SavingsGoal.create({
-            ...req.body,
+            name,
+            targetAmount,
+            deadline,
             userId: req.user._id,
             milestones: [25, 50, 75, 100].map(p => ({ percentage: p, reached: false })),
         });
@@ -16,7 +19,7 @@ export async function createGoal(req, res, next) {
 // GET /api/goals
 export async function getGoals(req, res, next) {
     try {
-        const goals = await SavingsGoal.find({ userId: req.user._id }).sort({ createdAt: -1 });
+        const goals = await SavingsGoal.find({ userId: req.user._id }).sort({ createdAt: -1 }).lean();
         res.json({ success: true, goals });
     } catch (err) { next(err); }
 }
@@ -24,7 +27,7 @@ export async function getGoals(req, res, next) {
 // GET /api/goals/:id
 export async function getGoal(req, res, next) {
     try {
-        const goal = await SavingsGoal.findOne({ _id: req.params.id, userId: req.user._id });
+        const goal = await SavingsGoal.findOne({ _id: req.params.id, userId: req.user._id }).lean();
         if (!goal) throw new AppError('Goal not found', 404);
         res.json({ success: true, goal });
     } catch (err) { next(err); }
@@ -33,9 +36,16 @@ export async function getGoal(req, res, next) {
 // PUT /api/goals/:id
 export async function updateGoal(req, res, next) {
     try {
+        // Whitelist allowed fields to prevent mass-assignment attacks
+        const allowedFields = ['name', 'targetAmount', 'deadline'];
+        const updates = {};
+        for (const key of allowedFields) {
+            if (req.body[key] !== undefined) updates[key] = req.body[key];
+        }
+
         const goal = await SavingsGoal.findOneAndUpdate(
             { _id: req.params.id, userId: req.user._id },
-            req.body,
+            updates,
             { new: true, runValidators: true }
         );
         if (!goal) throw new AppError('Goal not found', 404);
@@ -66,10 +76,9 @@ export async function contribute(req, res, next) {
 
         // Update milestones
         const pct = (goal.currentAmount / goal.targetAmount) * 100;
-        goal.milestones = goal.milestones.map(m => ({
-            ...m,
-            reached: pct >= m.percentage,
-        }));
+        goal.milestones.forEach(m => {
+            m.reached = pct >= m.percentage;
+        });
 
         if (goal.currentAmount >= goal.targetAmount) {
             goal.status = 'completed';
@@ -83,7 +92,7 @@ export async function contribute(req, res, next) {
 // GET /api/goals/:id/progress
 export async function getProgress(req, res, next) {
     try {
-        const goal = await SavingsGoal.findOne({ _id: req.params.id, userId: req.user._id });
+        const goal = await SavingsGoal.findOne({ _id: req.params.id, userId: req.user._id }).lean();
         if (!goal) throw new AppError('Goal not found', 404);
 
         const pct = (goal.currentAmount / goal.targetAmount) * 100;

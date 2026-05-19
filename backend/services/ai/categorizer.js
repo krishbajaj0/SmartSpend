@@ -1,4 +1,5 @@
-import Expense from '../../models/Expense.js';
+import Transaction from '../../models/Transaction.js';
+import { ACTIVE_TRANSACTION_FILTER } from '../../config/constants.js';
 
 // ── Tier 1: Exact merchant→category map ──
 const MERCHANT_MAP = {
@@ -67,11 +68,11 @@ export async function categorizeExpense(userId, merchant, notes = '', amount = 0
 
     // Tier 3: User history learning
     if (userId) {
-        const pastExpenses = await Expense.find({
+        const pastExpenses = await Transaction.find({ type: 'EXPENSE', ...ACTIVE_TRANSACTION_FILTER, 
             userId,
             merchantNormalized: merchantLower,
             aiCategorized: false, // user-set categories only
-            isDeleted: false,
+            ...ACTIVE_TRANSACTION_FILTER,
         }).sort({ date: -1 }).limit(5);
 
         if (pastExpenses.length > 0) {

@@ -6,9 +6,10 @@ import Button from '../ui/Button';
 import { CATEGORIES } from '../ui/CategoryBadge';
 import CategoryBadge from '../ui/CategoryBadge';
 import ConfirmDialog from '../ui/ConfirmDialog';
+import { formatCurrency } from '../../utils/currency';
 import './ExpenseDetail.css';
 
-export default function ExpenseDetail({ expense, isOpen, onClose, onEdit, onDelete }) {
+export default function ExpenseDetail({ expense, isOpen, onClose, onEdit, onDelete, currency = 'INR' }) {
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [deleting, setDeleting] = useState(false);
 
@@ -62,7 +63,7 @@ export default function ExpenseDetail({ expense, isOpen, onClose, onEdit, onDele
                                 {/* Amount */}
                                 <div className="expense-detail-amount">
                                     <div className="expense-detail-amount-value">
-                                        ₹{(expense.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                        {formatCurrency(expense.amount || 0, currency)}
                                     </div>
                                     <div className="expense-detail-amount-label">
                                         {expense.merchant}
@@ -186,7 +187,7 @@ export default function ExpenseDetail({ expense, isOpen, onClose, onEdit, onDele
                 onClose={() => setConfirmOpen(false)}
                 onConfirm={handleDelete}
                 title="Delete Expense"
-                message={`Delete ₹${(expense.amount || 0).toLocaleString()} spent at ${expense.merchant || 'Unknown'}? This cannot be undone.`}
+                message={`Delete ${formatCurrency(expense.amount || 0, currency)} spent at ${expense.merchant || 'Unknown'}? This cannot be undone.`}
                 confirmLabel="Delete"
                 loading={deleting}
             />

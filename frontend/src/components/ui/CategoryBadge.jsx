@@ -16,8 +16,9 @@ export const CATEGORIES = {
 };
 
 export function getCategoryInfo(category) {
-    if (CATEGORIES[category]) return CATEGORIES[category];
-    const words = category.split(/[_\s]/);
+    if (category && CATEGORIES[category]) return CATEGORIES[category];
+    const catStr = category || 'other';
+    const words = catStr.split(/[_\s]/);
     const label = words.map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
     return { label, icon: '📌', color: '#8892b0' };
 }

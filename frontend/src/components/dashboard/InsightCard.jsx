@@ -1,9 +1,10 @@
 import { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Lightbulb } from 'lucide-react';
+import { formatCurrency } from '../../utils/currency';
 import './InsightCard.css';
 
-export default function InsightCard({ budgets, recentExpenses }) {
+export default function InsightCard({ budgets, recentExpenses, currency = 'INR' }) {
     const insight = useMemo(() => {
         const categoryTotals = {};
         recentExpenses?.forEach(exp => {
@@ -28,7 +29,7 @@ export default function InsightCard({ budgets, recentExpenses }) {
         
         if (foodPct > 100) {
             type = 'warning';
-            text = `You've exceeded your Food budget by ₹${(foodSpent - foodLimit).toLocaleString()}`;
+            text = `You've exceeded your Food budget by ${formatCurrency(foodSpent - foodLimit, currency)}`;
             suggestions.push('Try meal prepping to reduce food expenses');
             suggestions.push('Look for deals and discounts on groceries');
         } else if (foodPct > 80) {
@@ -56,7 +57,7 @@ export default function InsightCard({ budgets, recentExpenses }) {
         }
         
         return { type, text, suggestions };
-    }, [budgets, recentExpenses]);
+    }, [budgets, recentExpenses, currency]);
 
     const getIcon = () => {
         switch (insight?.type) {

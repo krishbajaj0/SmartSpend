@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Wallet, Target, Plus, ArrowUpRight, Calendar } from 'lucide-react';
+import { Wallet, Plus, ArrowUpRight, Calendar } from 'lucide-react';
 import { format, differenceInDays } from 'date-fns';
 import GlassCard from '../components/ui/GlassCard';
 import Button from '../components/ui/Button';
@@ -13,11 +13,15 @@ import Dropdown from '../components/ui/Dropdown';
 import EmptyState from '../components/ui/EmptyState';
 import { CATEGORIES, getCategoryInfo } from '../components/ui/CategoryBadge';
 import { useToast } from '../context/ToastContext';
+import { useAuth } from '../context/AuthContext';
 import { budgetsAPI, goalsAPI } from '../utils/api';
+import { formatCurrency, getCurrencySymbol } from '../utils/currency';
 import './BudgetsPage.css';
 
 export default function BudgetsPage() {
     const location = useLocation();
+    const { user } = useAuth();
+    const currency = user?.currency || 'INR';
     const tab = location.pathname === '/goals' ? 'goals' : 'budgets';
     const [budgetData, setBudgetData] = useState([]);
     const [goals, setGoals] = useState([]);
@@ -76,15 +80,44 @@ export default function BudgetsPage() {
             setBudgetData(prev =>
                 prev.map(b => b.category === category ? { ...b, limit: Number(newLimit), limitAmount: Number(newLimit) } : b)
             );
-        } catch (err) {
+        } catch {
             addToast('Failed to update budget', { type: 'error' });
         }
+        window.dispatchEvent(new Event('expenseUpdated'));
     }
 
+    // Debounced threshold persistence — avoids spamming the API on every keystroke
+    const thresholdTimers = useRef({});
+
+    const persistThreshold = useCallback(async (category, budgetEntry) => {
+        try {
+            await budgetsAPI.createOrUpdate({
+                category,
+                limitAmount: budgetEntry.limitAmount || budgetEntry.limit,
+                warningThreshold: budgetEntry.warningThreshold ?? 75,
+                criticalThreshold: budgetEntry.criticalThreshold ?? 90,
+            });
+        } catch {
+            addToast('Failed to save threshold', { type: 'error' });
+        }
+    }, [addToast]);
+
     function updateThreshold(category, field, value) {
-        setBudgetData(prev =>
-            prev.map(b => b.category === category ? { ...b, [field]: Number(value) } : b)
-        );
+        const numValue = Number(value);
+        setBudgetData(prev => {
+            const updated = prev.map(b =>
+                b.category === category ? { ...b, [field]: numValue } : b
+            );
+            // Debounce the API call — persist after 800ms of no changes
+            clearTimeout(thresholdTimers.current[category]);
+            const entry = updated.find(b => b.category === category);
+            if (entry) {
+                thresholdTimers.current[category] = setTimeout(() => {
+                    persistThreshold(category, entry);
+                }, 800);
+            }
+            return updated;
+        });
     }
 
     async function handleContribute() {
@@ -96,8 +129,8 @@ export default function BudgetsPage() {
             // Refetch goals
             const res = await goalsAPI.list();
             setGoals(res.data.goals || []);
-            addToast(`₹${amt.toLocaleString('en-IN')} added to ${contributeGoal.name}!`, { type: 'success' });
-        } catch (err) {
+            addToast(`${formatCurrency(amt, currency)} added to ${contributeGoal.name}!`, { type: 'success' });
+        } catch {
             addToast('Failed to contribute', { type: 'error' });
         }
         setContributeGoal(null);
@@ -118,13 +151,17 @@ export default function BudgetsPage() {
             setAddGoalOpen(false);
             setNewGoal({ name: '', targetAmount: '', deadline: '' });
             addToast(`Goal "${newGoal.name}" created!`, { type: 'success' });
-        } catch (err) {
+        } catch {
             addToast('Failed to create goal', { type: 'error' });
         }
     }
 
     async function handleAddBudget() {
-        if (!newBudget.limitAmount || Number(newBudget.limitAmount) <= 0) return;
+        const isOverall = newBudget.category === 'overall';
+        if (!isOverall && (!newBudget.limitAmount || Number(newBudget.limitAmount) <= 0)) {
+            addToast('Please enter a valid limit amount', { type: 'error' });
+            return;
+        }
         
         const category = newBudget.category === '__custom__' 
             ? newBudget.customCategory?.toLowerCase().replace(/\s+/g, '_') || 'other'
@@ -138,7 +175,7 @@ export default function BudgetsPage() {
         try {
             await budgetsAPI.createOrUpdate({
                 category,
-                limitAmount: Number(newBudget.limitAmount),
+                limitAmount: isOverall ? 1 : Number(newBudget.limitAmount),
                 warningThreshold: 75,
                 criticalThreshold: 90
             });
@@ -151,7 +188,8 @@ export default function BudgetsPage() {
             setAddBudgetOpen(false);
             setNewBudget({ category: '', limitAmount: '', customCategory: '' });
             addToast(`Budget set for ${newBudget.category === '__custom__' ? newBudget.customCategory : CATEGORIES[category]?.label || category}`, { type: 'success' });
-        } catch (err) {
+            window.dispatchEvent(new Event('expenseUpdated'));
+        } catch {
             addToast('Failed to create budget', { type: 'error' });
         }
     }
@@ -236,44 +274,18 @@ export default function BudgetsPage() {
                                                 <span className="budget-card-cat-name" style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{cat.label}</span>
                                             </div>
                                             <span className="budget-card-amounts">
-                                                <strong>₹{(b.spent || 0).toLocaleString()}</strong> / ₹{(b.limit || 0).toLocaleString()}
+                                                <strong>{formatCurrency(b.spent || 0, currency)}</strong> / {formatCurrency(b.limit || 0, currency)}
                                             </span>
                                         </div>
                                         <ProgressBar value={b.spent || 0} max={b.limit || 1} showPercentage size="md" />
                                         <div className="budget-slider-wrapper" style={{ marginTop: 'var(--space-md)' }}>
                                             <div className="budget-slider-label">
-                                                <span>Master Monthly Limit</span>
-                                                <span>₹{(overallCustomAmount || 0).toLocaleString()}</span>
+                                                <span>Linked to Account Balances</span>
+                                                <span style={{ fontSize: '0.8rem', opacity: 0.7 }}>(Auto-updates)</span>
                                             </div>
-                                            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                                                <input
-                                                    type="range"
-                                                    className="budget-slider"
-                                                    min="1000"
-                                                    max="100000"
-                                                    step="1000"
-                                                    value={overallCustomAmount || 0}
-                                                    onChange={e => setOverallCustomAmount(Number(e.target.value))}
-                                                    style={{ flex: 1 }}
-                                                />
-                                                <input
-                                                    type="number"
-                                                    value={overallCustomAmount}
-                                                    onChange={e => setOverallCustomAmount(Number(e.target.value))}
-                                                    onBlur={() => updateBudgetLimit('overall', overallCustomAmount)}
-                                                    onKeyDown={e => e.key === 'Enter' && updateBudgetLimit('overall', overallCustomAmount)}
-                                                    style={{
-                                                        width: '120px',
-                                                        padding: '8px 12px',
-                                                        background: 'var(--bg-input)',
-                                                        border: '1px solid var(--border-subtle)',
-                                                        borderRadius: 'var(--radius-md)',
-                                                        color: 'var(--text-primary)',
-                                                        fontSize: '1rem',
-                                                    }}
-                                                    placeholder="Custom"
-                                                />
-                                            </div>
+                                            <p style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', marginTop: '4px' }}>
+                                                Your master spending limit is automatically set to your total available funds (Net Worth).
+                                            </p>
                                         </div>
                                     </GlassCard>
                                 </motion.div>
@@ -297,14 +309,14 @@ export default function BudgetsPage() {
                                                 <span className="budget-card-cat-name">{cat.label}</span>
                                             </div>
                                             <span className="budget-card-amounts">
-                                                <strong>₹{(b.spent || 0).toLocaleString()}</strong> / ₹{(b.limit || 0).toLocaleString()}
+                                                <strong>{formatCurrency(b.spent || 0, currency)}</strong> / {formatCurrency(b.limit || 0, currency)}
                                             </span>
                                         </div>
                                         <ProgressBar value={b.spent || 0} max={b.limit || 1} showPercentage size="sm" />
                                         <div className="budget-slider-wrapper">
                                             <div className="budget-slider-label">
                                                 <span>Monthly Limit</span>
-                                                <span>₹{(b.limit || 0).toLocaleString()}</span>
+                                                <span>{formatCurrency(b.limit || 0, currency)}</span>
                                             </div>
                                             <input
                                                 type="range"
@@ -362,7 +374,6 @@ export default function BudgetsPage() {
                         <div className="goals-grid">
                             {goals.map((g, i) => {
                                 const daysLeft = differenceInDays(new Date(g.deadline), new Date());
-                                const pct = (g.currentAmount / g.targetAmount) * 100;
                                 return (
                                     <motion.div
                                         key={g._id || g.id}
@@ -382,7 +393,7 @@ export default function BudgetsPage() {
                                             <div>
                                                 <div className="goal-card-name">{g.name}</div>
                                                 <div className="goal-card-target">
-                                                    <strong>₹{g.currentAmount.toLocaleString()}</strong> / ₹{g.targetAmount.toLocaleString()}
+                                                    <strong>{formatCurrency(g.currentAmount, currency)}</strong> / {formatCurrency(g.targetAmount, currency)}
                                                 </div>
                                                 <div className="goal-card-deadline">
                                                     <Calendar size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />
@@ -423,7 +434,7 @@ export default function BudgetsPage() {
             >
                 <div className="contribute-form">
                     <div className="amount-display">
-                        <div className="amount-value">₹{contributeAmount || '0'}</div>
+                        <div className="amount-value">{getCurrencySymbol(currency)}{contributeAmount || '0'}</div>
                     </div>
                     <Input
                         label="Amount"
@@ -455,7 +466,7 @@ export default function BudgetsPage() {
                         placeholder="e.g. Emergency Fund"
                     />
                     <Input
-                        label="Target Amount (₹)"
+                        label={`Target Amount (${getCurrencySymbol(currency)})`}
                         type="number"
                         value={newGoal.targetAmount}
                         onChange={e => setNewGoal(p => ({ ...p, targetAmount: e.target.value }))}
@@ -500,7 +511,9 @@ export default function BudgetsPage() {
                     <Dropdown
                         label="Category"
                         options={[
-                            ...Object.entries(CATEGORIES).map(([value, { label, icon }]) => ({ value, label: `${icon} ${label}` })),
+                            ...Object.entries(CATEGORIES)
+                                .filter(([value]) => value !== 'overall' || !budgetData.some(b => b.category === 'overall'))
+                                .map(([value, { label, icon }]) => ({ value, label: `${icon} ${label}` })),
                             { value: '__custom__', label: '✏️ Custom Category' }
                         ]}
                         value={newBudget.category}
@@ -515,14 +528,20 @@ export default function BudgetsPage() {
                             placeholder="e.g. Gaming, Gifts, etc."
                         />
                     )}
-                    <Input
-                        label="Monthly Limit (₹)"
-                        type="number"
-                        value={newBudget.limitAmount}
-                        onChange={e => setNewBudget(p => ({ ...p, limitAmount: e.target.value }))}
-                        placeholder="e.g. 5000"
-                        min="1"
-                    />
+                    {newBudget.category === 'overall' ? (
+                        <div style={{ padding: '12px', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '8px', marginBottom: '16px', fontSize: '0.9rem', color: '#10b981' }}>
+                            💡 Master limit is automatically linked to your total account balances.
+                        </div>
+                    ) : (
+                        <Input
+                            label={`Monthly Limit (${getCurrencySymbol(currency)})`}
+                            type="number"
+                            value={newBudget.limitAmount}
+                            onChange={e => setNewBudget(p => ({ ...p, limitAmount: e.target.value }))}
+                            placeholder="e.g. 5000"
+                            min="1"
+                        />
+                    )}
                     <div className="add-goal-actions">
                         <Button variant="ghost" onClick={() => setAddBudgetOpen(false)}>Cancel</Button>
                         <Button variant="primary" onClick={handleAddBudget}>Create Budget</Button>

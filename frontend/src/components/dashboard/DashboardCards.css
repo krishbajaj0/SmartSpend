@@ -1,18 +1,17 @@
 .stat-card-premium {
     position: relative;
-    background: var(--bg-card);
+    background: var(--card-bg-gradient);
     backdrop-filter: blur(20px);
-    border: 1px solid var(--border-subtle);
+    border: 1px solid rgba(255, 255, 255, 0.04);
     border-radius: var(--radius-xl);
-    padding: var(--space-lg);
+    padding: 16px;
     overflow: hidden;
     transition: all var(--transition-base);
 }
 
 .stat-card-premium:hover {
-    border-color: var(--card-color);
-    transform: translateY(-4px);
-    box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.4);
 }
 
 .stat-card-accent {
@@ -51,22 +50,27 @@
 }
 
 .stat-card-icon-premium {
-    width: 40px;
-    height: 40px;
+    width: 32px;
+    height: 32px;
     border-radius: var(--radius-lg);
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.03);
     display: flex;
     align-items: center;
     justify-content: center;
     color: var(--card-color);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    border: none;
+}
+
+.stat-card-icon-premium svg {
+    width: 16px;
+    height: 16px;
 }
 
 .stat-card-value-premium {
-    font-size: 2rem;
+    font-size: 1.6rem;
     font-weight: 800;
     color: var(--text-primary);
-    margin-bottom: var(--space-sm);
+    margin-bottom: var(--space-xs);
     position: relative;
     z-index: 1;
     letter-spacing: -0.02em;

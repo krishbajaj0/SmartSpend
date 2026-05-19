@@ -1,34 +1,39 @@
 import cron from 'node-cron';
-import Expense from '../models/Expense.js';
+import Transaction from '../models/Transaction.js';
 import Budget from '../models/Budget.js';
 import { createNotification } from '../controllers/notificationController.js';
 import { generateInsights } from '../services/ai/insightsEngine.js';
 import User from '../models/User.js';
+import { runWithJobLock } from '../utils/jobLock.js';
+import { ACTIVE_TRANSACTION_FILTER } from '../config/constants.js';
 
 /**
  * Initialize all cron jobs.
+ * All jobs use batch aggregation pipelines instead of N+1 per-user loops.
  */
 export function initCronJobs() {
     // ── Daily midnight: Process recurring expenses ──
-    cron.schedule('0 0 * * *', async () => {
+    cron.schedule('0 0 * * *', () => runWithJobLock('recurring-expenses-daily', async () => {
         console.log('⏰ Running daily recurring expenses job...');
         try {
             const today = new Date();
-            const recurringExpenses = await Expense.find({
+            const recurringExpenses = await Transaction.find({ type: 'EXPENSE', ...ACTIVE_TRANSACTION_FILTER, 
                 isRecurring: true,
-                isDeleted: false,
+                ...ACTIVE_TRANSACTION_FILTER,
                 nextRecurrenceDate: { $lte: today },
             });
 
+            // Batch: prepare all new docs + updates at once
+            const newDocs = [];
+            const bulkOps = [];
+
             for (const expense of recurringExpenses) {
-                // Create new expense entry
                 const newExpense = expense.toObject();
                 delete newExpense._id;
                 delete newExpense.createdAt;
                 delete newExpense.updatedAt;
                 newExpense.date = today;
-
-                await Expense.create(newExpense);
+                newDocs.push(newExpense);
 
                 // Calculate next recurrence
                 const next = new Date(today);
@@ -38,90 +43,217 @@ export function initCronJobs() {
                     case 'monthly': next.setMonth(next.getMonth() + 1); break;
                     case 'yearly': next.setFullYear(next.getFullYear() + 1); break;
                 }
-                expense.nextRecurrenceDate = next;
-                await expense.save();
+                bulkOps.push({
+                    updateOne: {
+                        filter: { _id: expense._id },
+                        update: { $set: { nextRecurrenceDate: next } },
+                    },
+                });
+            }
+
+            if (newDocs.length > 0) {
+                await Transaction.insertMany(newDocs, { ordered: false });
+                await Transaction.bulkWrite(bulkOps, { ordered: false });
             }
 
             console.log(`✅ Processed ${recurringExpenses.length} recurring expenses`);
         } catch (err) {
             console.error('❌ Recurring expenses job error:', err.message);
         }
-    });
+    }));
 
     // ── Weekly (Sunday midnight): Weekly spending summary ──
-    cron.schedule('0 0 * * 0', async () => {
+    // Uses a single aggregation pipeline instead of N+1 queries per user.
+    cron.schedule('0 0 * * 0', () => runWithJobLock('weekly-spending-summary', async () => {
         console.log('⏰ Running weekly summary job...');
         try {
-            const users = await User.find({});
             const weekAgo = new Date();
             weekAgo.setDate(weekAgo.getDate() - 7);
 
-            for (const user of users) {
-                const expenses = await Expense.find({
-                    userId: user._id, isDeleted: false, date: { $gte: weekAgo },
-                });
-                const total = expenses.reduce((s, e) => s + e.amount, 0);
+            // Single aggregation: group spending by user
+            const results = await Transaction.aggregate([
+        { $match: { type: 'EXPENSE', ...ACTIVE_TRANSACTION_FILTER,  ...ACTIVE_TRANSACTION_FILTER, date: { $gte: weekAgo } } },
+                { $group: {
+                    _id: '$userId',
+                    total: { $sum: { $ifNull: ['$baseAmount', '$amount'] } },
+                    count: { $sum: 1 },
+                }},
+            ]);
 
-                if (expenses.length > 0) {
-                    await createNotification(
-                        user._id, 'general',
-                        'Weekly Spending Summary',
-                        `You spent ₹${Math.round(total).toLocaleString()} across ${expenses.length} transactions this week`,
-                        2
-                    );
-                }
+            // Batch notifications
+            const notifications = results
+                .filter(r => r.count > 0)
+                .map(r => ({
+                    userId: r._id,
+                    type: 'general',
+                    title: 'Weekly Spending Summary',
+                    message: `You spent ${Math.round(r.total).toLocaleString()} across ${r.count} transactions this week`,
+                    priority: 2,
+                }));
+
+            if (notifications.length > 0) {
+                const { default: Notification } = await import('../models/Notification.js');
+                await Notification.insertMany(notifications, { ordered: false });
             }
         } catch (err) {
             console.error('❌ Weekly summary job error:', err.message);
         }
-    });
+    }));
+
+    // ── Daily (8:00 PM): Daily spending summary ──
+    // Uses a single aggregation pipeline instead of N+1 queries per user.
+    cron.schedule('0 20 * * *', () => runWithJobLock('daily-spending-summary', async () => {
+        console.log('⏰ Running daily summary job...');
+        try {
+            const startOfDay = new Date();
+            startOfDay.setHours(0, 0, 0, 0);
+            const endOfDay = new Date();
+            endOfDay.setHours(23, 59, 59, 999);
+
+            // Single aggregation: group today's spending by user
+            const results = await Transaction.aggregate([
+        { $match: { type: 'EXPENSE', ...ACTIVE_TRANSACTION_FILTER,  ...ACTIVE_TRANSACTION_FILTER, date: { $gte: startOfDay, $lte: endOfDay } } },
+                { $group: {
+                    _id: '$userId',
+                    total: { $sum: { $ifNull: ['$baseAmount', '$amount'] } },
+                    count: { $sum: 1 },
+                }},
+            ]);
+
+            const notifications = results
+                .filter(r => r.count > 0)
+                .map(r => ({
+                    userId: r._id,
+                    type: 'general',
+                    title: 'Daily Spending Summary',
+                    message: `You spent ${Math.round(r.total).toLocaleString()} across ${r.count} transactions today.`,
+                    priority: 2,
+                }));
+
+            if (notifications.length > 0) {
+                const { default: Notification } = await import('../models/Notification.js');
+                await Notification.insertMany(notifications, { ordered: false });
+            }
+        } catch (err) {
+            console.error('❌ Daily summary job error:', err.message);
+        }
+    }));
+
+    // ── Daily (9:00 PM): No expenses logged reminder ──
+    // Uses single aggregation to find users WITH expenses, then notifies the rest.
+    cron.schedule('0 21 * * *', () => runWithJobLock('no-expenses-reminder', async () => {
+        console.log('⏰ Running no-expenses reminder job...');
+        try {
+            const startOfDay = new Date();
+            startOfDay.setHours(0, 0, 0, 0);
+
+            // Get distinct userIds who have logged expenses today
+            const activeUserIds = await Transaction.distinct('userId', {
+                ...ACTIVE_TRANSACTION_FILTER,
+                date: { $gte: startOfDay },
+            });
+
+            // Find all users NOT in the active set
+            const inactiveUsers = await User.find(
+                { _id: { $nin: activeUserIds } },
+                { _id: 1 }
+            ).lean();
+
+            const notifications = inactiveUsers.map(u => ({
+                userId: u._id,
+                type: 'insight',
+                title: 'Nothing logged today?',
+                message: "If you made any purchases today, don't forget to log them to keep your budget accurate!",
+                priority: 2,
+            }));
+
+            if (notifications.length > 0) {
+                const { default: Notification } = await import('../models/Notification.js');
+                await Notification.insertMany(notifications, { ordered: false });
+            }
+        } catch (err) {
+            console.error('❌ No-expenses reminder job error:', err.message);
+        }
+    }));
 
     // ── Monthly (1st midnight): Archive budgets & generate insights ──
-    cron.schedule('0 0 1 * *', async () => {
+    // Budget history archival uses a single aggregation for all budgets.
+    cron.schedule('0 0 1 * *', () => runWithJobLock('monthly-budget-archive', async () => {
         console.log('⏰ Running monthly reset job...');
         try {
             const now = new Date();
             const lastMonth = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
             const lastYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
-
-            const budgets = await Budget.find({ isActive: true });
             const lastStart = new Date(lastYear, lastMonth, 1);
             const lastEnd = new Date(now.getFullYear(), now.getMonth(), 0);
 
-            for (const budget of budgets) {
-                const [agg] = await Expense.aggregate([
-                    { $match: { userId: budget.userId, category: budget.category, isDeleted: false, date: { $gte: lastStart, $lte: lastEnd } } },
-                    { $group: { _id: null, total: { $sum: '$amount' } } },
-                ]);
+            const budgets = await Budget.find({ isActive: true }).lean();
 
-                budget.history.push({
-                    month: lastMonth + 1,
-                    year: lastYear,
-                    totalSpent: agg?.total || 0,
-                    limitAmount: budget.limitAmount,
-                });
-                await budget.save();
+            // Single aggregation: get totals per (userId, category) for last month
+            const spendAgg = await Transaction.aggregate([
+        { $match: { type: 'EXPENSE', ...ACTIVE_TRANSACTION_FILTER,  ...ACTIVE_TRANSACTION_FILTER, date: { $gte: lastStart, $lte: lastEnd } } },
+                { $group: {
+                    _id: { userId: '$userId', category: '$category' },
+                    total: { $sum: { $ifNull: ['$baseAmount', '$amount'] } },
+                }},
+            ]);
+
+            // Build lookup map: "userId:category" -> total
+            const spendMap = {};
+            for (const row of spendAgg) {
+                spendMap[`${row._id.userId}:${row._id.category}`] = row.total;
             }
 
-            // Generate fresh AI insights for all users
-            const users = await User.find({});
-            for (const user of users) {
-                const insights = await generateInsights(user._id);
-                if (insights.length > 0) {
-                    await createNotification(
-                        user._id, 'insight',
-                        'Monthly AI Insights',
-                        insights[0].message,
-                        3
-                    );
+            // Bulk update all budgets with archived history
+            const bulkOps = budgets.map(b => ({
+                updateOne: {
+                    filter: { _id: b._id },
+                    update: {
+                        $push: {
+                            history: {
+                                month: lastMonth + 1,
+                                year: lastYear,
+                                totalSpent: spendMap[`${b.userId}:${b.category}`] || 0,
+                                limitAmount: b.limitAmount,
+                            },
+                        },
+                    },
+                },
+            }));
+
+            if (bulkOps.length > 0) {
+                await Budget.bulkWrite(bulkOps, { ordered: false });
+            }
+
+            // Generate AI insights (inherently per-user, but parallelized)
+            const users = await User.find({}, { _id: 1 }).lean();
+            const insightResults = await Promise.allSettled(
+                users.map(u => generateInsights(u._id))
+            );
+
+            const insightNotifs = [];
+            insightResults.forEach((result, i) => {
+                if (result.status === 'fulfilled' && result.value?.length > 0) {
+                    insightNotifs.push({
+                        userId: users[i]._id,
+                        type: 'insight',
+                        title: 'Monthly AI Insights',
+                        message: result.value[0].message,
+                        priority: 3,
+                    });
                 }
+            });
+
+            if (insightNotifs.length > 0) {
+                const { default: Notification } = await import('../models/Notification.js');
+                await Notification.insertMany(insightNotifs, { ordered: false });
             }
 
             console.log(`✅ Monthly reset — archived ${budgets.length} budgets`);
         } catch (err) {
             console.error('❌ Monthly reset job error:', err.message);
         }
-    });
+    }));
 
     console.log('📅 Cron jobs initialized');
 }

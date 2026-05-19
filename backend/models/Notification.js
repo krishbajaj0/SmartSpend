@@ -22,6 +22,10 @@ const notificationSchema = new mongoose.Schema({
 });
 
 notificationSchema.index({ userId: 1, read: 1, createdAt: -1 });
+notificationSchema.index({ userId: 1, type: 1, 'metadata.dedupeKey': 1 }, { unique: true, sparse: true });
+
+// TTL: auto-delete notifications older than 90 days
+notificationSchema.index({ createdAt: 1 }, { expireAfterSeconds: 90 * 24 * 60 * 60 });
 
 const Notification = mongoose.model('Notification', notificationSchema);
 export default Notification;

@@ -5,6 +5,7 @@ import GlassCard from '../ui/GlassCard';
 import { aiAPI, expensesAPI } from '../../utils/api';
 import { CATEGORIES } from '../ui/CategoryBadge';
 import { useToast } from '../../context/ToastContext';
+import { formatCurrency } from '../../utils/currency';
 import './SubscriptionsCard.css';
 
 export default function SubscriptionsCard() {
@@ -93,7 +94,7 @@ export default function SubscriptionsCard() {
                                 </div>
                             </div>
                             <div className="subscription-amount">
-                                ₹{sub.amount.toLocaleString('en-IN')}
+                                {formatCurrency(sub.amount)}
                                 <small>/{sub.interval === 'monthly' ? 'mo' : sub.interval === 'weekly' ? 'wk' : sub.interval === 'quarterly' ? 'qtr' : 'yr'}</small>
                             </div>
                             {sub.isConverted ? (
@@ -117,7 +118,7 @@ export default function SubscriptionsCard() {
             {totalMonthly > 0 && (
                 <div className="subscriptions-total">
                     <span>Est. Monthly Total</span>
-                    <span>₹{Math.round(totalMonthly).toLocaleString('en-IN')}/mo</span>
+                    <span>{formatCurrency(Math.round(totalMonthly))}/mo</span>
                 </div>
             )}
         </GlassCard>

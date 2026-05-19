@@ -1,6 +1,7 @@
-import Expense from '../../models/Expense.js';
+import Transaction from '../../models/Transaction.js';
 import Budget from '../../models/Budget.js';
 import { getSpendingPredictions } from './predictor.js';
+import { ACTIVE_TRANSACTION_FILTER } from '../../config/constants.js';
 
 /**
  * Generate personalized AI financial insights.
@@ -13,16 +14,16 @@ export async function generateInsights(userId) {
     const lastEnd = new Date(now.getFullYear(), now.getMonth(), 0);
 
     const [thisMonth, lastMonth] = await Promise.all([
-        Expense.find({ userId, isDeleted: false, date: { $gte: thisStart } }),
-        Expense.find({ userId, isDeleted: false, date: { $gte: lastStart, $lte: lastEnd } }),
+        Transaction.find({ type: 'EXPENSE', ...ACTIVE_TRANSACTION_FILTER,  userId, ...ACTIVE_TRANSACTION_FILTER, date: { $gte: thisStart } }),
+        Transaction.find({ type: 'EXPENSE', ...ACTIVE_TRANSACTION_FILTER,  userId, ...ACTIVE_TRANSACTION_FILTER, date: { $gte: lastStart, $lte: lastEnd } }),
     ]);
 
-    const thisTotal = thisMonth.reduce((s, e) => s + e.amount, 0);
-    const lastTotal = lastMonth.reduce((s, e) => s + e.amount, 0);
+    const thisTotal = thisMonth.reduce((s, e) => s + (e.baseAmount || e.amount), 0);
+    const lastTotal = lastMonth.reduce((s, e) => s + (e.baseAmount || e.amount), 0);
 
     // ── Category comparison vs last month ──
-    const thisCat = {}; thisMonth.forEach(e => { thisCat[e.category] = (thisCat[e.category] || 0) + e.amount; });
-    const lastCat = {}; lastMonth.forEach(e => { lastCat[e.category] = (lastCat[e.category] || 0) + e.amount; });
+    const thisCat = {}; thisMonth.forEach(e => { thisCat[e.category] = (thisCat[e.category] || 0) + (e.baseAmount || e.amount); });
+    const lastCat = {}; lastMonth.forEach(e => { lastCat[e.category] = (lastCat[e.category] || 0) + (e.baseAmount || e.amount); });
 
     for (const [cat, amount] of Object.entries(thisCat)) {
         const prev = lastCat[cat] || 0;
@@ -59,7 +60,7 @@ export async function generateInsights(userId) {
     // ── Recurring subscriptions total ──
     const recurring = thisMonth.filter(e => e.isRecurring);
     if (recurring.length > 0) {
-        const recurringTotal = recurring.reduce((s, e) => s + e.amount, 0);
+        const recurringTotal = recurring.reduce((s, e) => s + (e.baseAmount || e.amount), 0);
         insights.push({
             type: 'subscriptions',
             message: `Your recurring subscriptions total ₹${Math.round(recurringTotal).toLocaleString()}/month. Review if all are still needed`,

@@ -1,4 +1,5 @@
-import Expense from '../../models/Expense.js';
+import Transaction from '../../models/Transaction.js';
+import { ACTIVE_TRANSACTION_FILTER } from '../../config/constants.js';
 
 /**
  * AI Budget advisor — suggest budget limits based on spending history.
@@ -8,8 +9,8 @@ export async function getBudgetRecommendations(userId) {
     const threeMonthsAgo = new Date();
     threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
 
-    const expenses = await Expense.find({
-        userId, isDeleted: false, date: { $gte: threeMonthsAgo },
+    const expenses = await Transaction.find({ type: 'EXPENSE', ...ACTIVE_TRANSACTION_FILTER, 
+        userId, ...ACTIVE_TRANSACTION_FILTER, date: { $gte: threeMonthsAgo },
     });
 
     if (expenses.length === 0) return recommendations;
@@ -21,7 +22,7 @@ export async function getBudgetRecommendations(userId) {
         const monthKey = `${new Date(e.date).getFullYear()}-${new Date(e.date).getMonth()}`;
         if (!catMonthly[key]) catMonthly[key] = {};
         if (!catMonthly[key][monthKey]) catMonthly[key][monthKey] = 0;
-        catMonthly[key][monthKey] += e.amount;
+        catMonthly[key][monthKey] += (e.baseAmount || e.amount);
     });
 
     for (const [category, months] of Object.entries(catMonthly)) {

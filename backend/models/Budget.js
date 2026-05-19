@@ -15,7 +15,7 @@ const budgetSchema = new mongoose.Schema({
     limitAmount: {
         type: Number,
         required: [true, 'Budget limit is required'],
-        min: 0,
+        min: [0.01, 'Budget limit must be greater than zero'],
     },
     warningThreshold: { type: Number, default: 75, min: 0, max: 100 },
     criticalThreshold: { type: Number, default: 90, min: 0, max: 100 },
@@ -32,7 +32,21 @@ const budgetSchema = new mongoose.Schema({
     timestamps: true,
 });
 
+budgetSchema.pre('validate', function (next) {
+    if (this.warningThreshold >= this.criticalThreshold) {
+        this.invalidate('warningThreshold', 'Warning threshold must be lower than critical threshold');
+    }
+    next();
+});
+
+// Unique constraint: one budget per user per category
 budgetSchema.index({ userId: 1, category: 1 }, { unique: true });
+
+// Active budget lookup — used on every dashboard and budget status request.
+// Query: { userId, isActive: true }
+// WHY: without this, every getBudgets / getBudgetStatus call does a collection
+// scan over all budgets for the user (including soft-deleted / inactive ones).
+budgetSchema.index({ userId: 1, isActive: 1 });
 
 const Budget = mongoose.model('Budget', budgetSchema);
 export default Budget;

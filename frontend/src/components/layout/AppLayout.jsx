@@ -5,6 +5,7 @@ import Sidebar from './Sidebar';
 import Header from './Header';
 import BottomNav from './BottomNav';
 import ScrollProgress from '../ScrollProgress';
+import AiAssistant from '../assistant/AiAssistant';
 import './AppLayout.css';
 
 export default function AppLayout() {
@@ -16,7 +17,7 @@ export default function AppLayout() {
             <ScrollProgress />
             <Sidebar />
             <div className="app-main">
-                <Header onAddExpense={() => setShowAddExpense(true)} />
+                <Header />
                 <main className="app-content">
                     <AnimatePresence mode="wait">
                         <motion.div
@@ -32,6 +33,7 @@ export default function AppLayout() {
                 </main>
             </div>
             <BottomNav />
+            <AiAssistant />
         </div>
     );
 }

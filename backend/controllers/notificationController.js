@@ -1,5 +1,8 @@
 import Notification from '../models/Notification.js';
+import User from '../models/User.js';
 import { AppError } from '../middleware/errorHandler.js';
+import { emitToUser } from '../services/socketService.js';
+import { sendNotificationEmail } from '../services/emailService.js';
 
 // GET /api/notifications
 export async function getNotifications(req, res, next) {
@@ -9,7 +12,7 @@ export async function getNotifications(req, res, next) {
         const skip = (Number(page) - 1) * Number(limit);
 
         const [notifications, total, unreadCount] = await Promise.all([
-            Notification.find(filter).sort({ read: 1, createdAt: -1 }).skip(skip).limit(Number(limit)),
+            Notification.find(filter).sort({ read: 1, createdAt: -1 }).skip(skip).limit(Number(limit)).lean(),
             Notification.countDocuments(filter),
             Notification.countDocuments({ ...filter, read: false }),
         ]);
@@ -46,5 +49,26 @@ export async function markAllRead(req, res, next) {
 
 // Helper: create notification (used by services)
 export async function createNotification(userId, type, title, message, priority = 3, metadata = {}) {
-    return Notification.create({ userId, type, title, message, priority, metadata });
+    const notification = await Notification.create({ userId, type, title, message, priority, metadata });
+    
+    // Emit via WebSocket
+    emitToUser(userId, 'notification', notification);
+
+    // Send email ONLY for high priority alerts (4 and 5)
+    if (priority >= 4) {
+        try {
+            const user = await User.findById(userId);
+            if (user && user.notificationPreferences?.email !== false) {
+                // If the email service has a generic notification email sender, trigger it here
+                // Assumes sendNotificationEmail exists or is implemented below
+                if (typeof sendNotificationEmail === 'function') {
+                    await sendNotificationEmail(user.email, user.name, title, message);
+                }
+            }
+        } catch (err) {
+            console.error('Failed to send high-priority notification email:', err.message);
+        }
+    }
+
+    return notification;
 }

@@ -1,4 +1,5 @@
-import Expense from '../../models/Expense.js';
+import Transaction from '../../models/Transaction.js';
+import { ACTIVE_TRANSACTION_FILTER } from '../../config/constants.js';
 
 /**
  * Detect subscription/recurring payments from expense history.
@@ -7,7 +8,7 @@ export async function detectSubscriptions(userId) {
     const sixMonthsAgo = new Date();
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
-    const expenses = await Expense.find({
+    const expenses = await Transaction.find({ type: 'EXPENSE', isDeleted: false, 
         userId,
         isDeleted: false,
         date: { $gte: sixMonthsAgo },

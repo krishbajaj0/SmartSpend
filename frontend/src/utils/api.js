@@ -4,29 +4,75 @@ const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 const api = axios.create({
     baseURL: API_URL,
+    withCredentials: true,
     headers: { 'Content-Type': 'application/json' },
 });
 
 // ── Request interceptor: inject JWT ──
+function getCookie(name) {
+    return document.cookie
+        .split(';')
+        .map(part => part.trim())
+        .find(part => part.startsWith(`${name}=`))
+        ?.split('=')
+        .slice(1)
+        .join('=') || '';
+}
+
+function createIdempotencyKey() {
+    if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+    return `${Date.now()}-${Math.random().toString(16).slice(2)}-${Math.random().toString(16).slice(2)}`;
+}
+
 api.interceptors.request.use(config => {
-    const token = localStorage.getItem('smartexpense_token');
-    if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
+    config.headers['X-Request-Id'] = config.headers['X-Request-Id'] || createIdempotencyKey();
+    const method = (config.method || 'get').toUpperCase();
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+        const csrf = decodeURIComponent(getCookie('smsp_csrf'));
+        if (csrf) config.headers['X-CSRF-Token'] = csrf;
+        if (!config.headers['Idempotency-Key']) {
+            config.headers['Idempotency-Key'] = createIdempotencyKey();
+        }
     }
     return config;
 });
 
-// ── Response interceptor: handle 401 auto-logout ──
+// ── Response interceptor: 503 retry + SPA-safe 401 handling ──
 api.interceptors.response.use(
     res => res,
-    error => {
-        if (error.response?.status === 401) {
-            localStorage.removeItem('smartexpense_token');
-            localStorage.removeItem('smartexpense_user');
-            if (window.location.pathname !== '/login') {
-                window.location.href = '/login';
+    async (error) => {
+        const config = error.config || {};
+
+        // ── 503 Overload: retry up to 2 times with exponential backoff ──
+        if (error.response?.status === 503) {
+            config._retryCount = config._retryCount || 0;
+            if (config._retryCount < 2) {
+                config._retryCount++;
+                const delay = config._retryCount * 500;
+                await new Promise(r => setTimeout(r, delay));
+                return api(config);
             }
         }
+
+        // ── 401 Unauthorized: SPA-safe soft redirect ──
+        if (error.response?.status === 401) {
+            // Do NOT fire auth_error for initial session check (getMe)
+            // or we'll get stuck in a redirect loop on public pages like Register.
+            if (config.url?.endsWith('/auth/me')) {
+                return Promise.reject(error);
+            }
+
+            // Fire once per session to avoid duplicate redirects
+            if (!window.__authEventFired) {
+                window.__authEventFired = true;
+                window.dispatchEvent(new CustomEvent('auth_error', {
+                    detail: { reason: 'session_expired' }
+                }));
+                // Reset flag after a short delay so future expirations still work
+                setTimeout(() => { window.__authEventFired = false; }, 2000);
+            }
+        }
+
         return Promise.reject(error);
     }
 );
@@ -35,6 +81,7 @@ api.interceptors.response.use(
 export const authAPI = {
     register: (data) => api.post('/auth/register', data),
     login: (data) => api.post('/auth/login', data),
+    logout: () => api.post('/auth/logout'),
     getMe: () => api.get('/auth/me'),
     updateProfile: (data) => api.put('/auth/profile', data),
     changePassword: (data) => api.put('/auth/change-password', data),
@@ -42,11 +89,13 @@ export const authAPI = {
     resetPassword: (data) => api.post('/auth/reset-password', data),
     verifyOtp: (data) => api.post('/auth/verify-otp', data),
     resendOtp: (email) => api.post('/auth/resend-otp', { email }),
+    requestLoginOtp: (email) => api.post('/auth/login-otp', { email }),
+    verifyLoginOtp: (data) => api.post('/auth/verify-login-otp', data),
 };
 
 // ── Expenses ──
 export const expensesAPI = {
-    list: (params) => api.get('/expenses', { params }),
+    list: (params, config = {}) => api.get('/expenses', { params, ...config }),
     get: (id) => api.get(`/expenses/${id}`),
     create: (data) => api.post('/expenses', data),
     update: (id, data) => api.put(`/expenses/${id}`, data),
@@ -82,6 +131,7 @@ export const receiptsAPI = {
     }),
     list: () => api.get('/receipts'),
     get: (id) => api.get(`/receipts/${id}`),
+    fileUrl: (id) => `${API_URL}/receipts/${id}/file`,
     linkExpense: (id, data) => api.post(`/receipts/${id}/link-expense`, data),
 };
 
@@ -95,7 +145,7 @@ export const analyticsAPI = {
     getTopMerchants: () => api.get('/analytics/top-merchants'),
     getHeatmap: () => api.get('/analytics/heatmap'),
     getCategoryOverTime: () => api.get('/analytics/category-over-time'),
-    exportData: (params) => api.get('/analytics/export', { params }),
+    exportData: (params, config = {}) => api.get('/analytics/export', { params, ...config }),
 };
 
 // ── AI ──
@@ -108,6 +158,10 @@ export const aiAPI = {
     categorize: (data) => api.post('/ai/categorize', data),
     query: (query) => api.post('/ai/query', { query }),
     getSubscriptions: () => api.get('/ai/subscriptions'),
+    getHealthScore: () => api.get('/ai/health-score'),
+    chat: (message, conversationState = null, sessionId = null) =>
+        api.post('/ai/chat', { message, conversationState, sessionId }),
+    getChatHistory: (sessionId) => api.get('/ai/chat/history', { params: { sessionId } }),
 };
 
 // ── Import ──
@@ -130,6 +184,23 @@ export const notificationsAPI = {
 // ── Dashboard (consolidated) ──
 export const dashboardAPI = {
     load: () => api.get('/dashboard'),
+};
+
+// ── Accounts ──
+export const accountsAPI = {
+    list: () => api.get('/accounts'),
+    create: (data) => api.post('/accounts', data),
+    update: (id, data) => api.put(`/accounts/${id}`, data),
+    delete: (id) => api.delete(`/accounts/${id}`),
+    getTransactions: (id, params) => api.get(`/accounts/${id}/transactions`, { params }),
+};
+
+// ── Transactions (Ledger) ──
+export const transactionsAPI = {
+    list: (params) => api.get('/transactions', { params }),
+    createExpense: (data) => api.post('/transactions/expense', data),
+    createIncome: (data) => api.post('/transactions/income', data),
+    createTransfer: (data) => api.post('/transactions/transfer', data),
 };
 
 export default api;

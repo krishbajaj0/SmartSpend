@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { format } from 'date-fns';
 import { ArrowUpDown, ArrowUp, ArrowDown, Repeat } from 'lucide-react';
 import CategoryBadge, { CATEGORIES } from '../ui/CategoryBadge';
+import { formatCurrency } from '../../utils/currency';
 
 function formatExpenseDate(dateStr) {
     if (!dateStr) return '—';
@@ -20,6 +21,7 @@ function ExpenseTable({
     sortBy,
     onSortChange,
     onRowClick,
+    currency = 'INR',
 }) {
     const getSortIcon = useCallback((field) => {
         const [currentField, dir] = sortBy.split('-');
@@ -105,14 +107,14 @@ function ExpenseTable({
                                 transition={{ delay: i * 0.03 }}
                                 role="button"
                                 tabIndex={0}
-                                aria-label={`Expense: ${exp.merchant}, ₹${exp.amount || 0}, ${formatExpenseDate(exp.date)}`}
+                                aria-label={`Expense: ${exp.merchant}, ${formatCurrency(exp.amount || 0, currency)}, ${formatExpenseDate(exp.date)}`}
                             >
                                 <td>
                                     <CategoryBadge category={exp.category} size="sm" />
                                 </td>
                                 <td className="table-merchant">{exp.merchant || '—'}</td>
                                 <td className="table-amount">
-                                    ₹{(exp.amount || 0).toLocaleString('en-IN')}
+                                    {formatCurrency(exp.amount || 0, currency)}
                                 </td>
                                 <td className="table-date">
                                     {formatExpenseDate(exp.date)}

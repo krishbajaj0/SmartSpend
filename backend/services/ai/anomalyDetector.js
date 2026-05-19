@@ -1,4 +1,5 @@
-import Expense from '../../models/Expense.js';
+import Transaction from '../../models/Transaction.js';
+import { ACTIVE_TRANSACTION_FILTER } from '../../config/constants.js';
 
 /**
  * Anomaly detection for expenses.
@@ -6,8 +7,8 @@ import Expense from '../../models/Expense.js';
 export async function detectAnomalies(userId, newExpense = null) {
     const anomalies = [];
 
-    const expenses = await Expense.find({
-        userId, isDeleted: false,
+    const expenses = await Transaction.find({ type: 'EXPENSE', ...ACTIVE_TRANSACTION_FILTER, 
+        userId, ...ACTIVE_TRANSACTION_FILTER,
     }).sort({ date: -1 }).limit(200);
 
     if (expenses.length < 5) return anomalies;

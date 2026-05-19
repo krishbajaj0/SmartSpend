@@ -1,4 +1,5 @@
-import Expense from '../../models/Expense.js';
+import Transaction from '../../models/Transaction.js';
+import { ACTIVE_TRANSACTION_FILTER } from '../../config/constants.js';
 
 /**
  * Spending prediction model.
@@ -10,18 +11,18 @@ export async function getSpendingPredictions(userId) {
     const daysPassed = now.getDate();
 
     // Current month expenses
-    const expenses = await Expense.find({
-        userId, isDeleted: false, date: { $gte: monthStart },
+    const expenses = await Transaction.find({ type: 'EXPENSE', ...ACTIVE_TRANSACTION_FILTER, 
+        userId, ...ACTIVE_TRANSACTION_FILTER, date: { $gte: monthStart },
     });
 
-    const totalSpent = expenses.reduce((s, e) => s + e.amount, 0);
+    const totalSpent = expenses.reduce((s, e) => s + (e.baseAmount || e.amount), 0);
     const dailyRate = daysPassed > 0 ? totalSpent / daysPassed : 0;
     const projectedMonthEnd = Math.round(dailyRate * daysInMonth);
 
     // Category-level predictions
     const catSpend = {};
     expenses.forEach(e => {
-        catSpend[e.category] = (catSpend[e.category] || 0) + e.amount;
+        catSpend[e.category] = (catSpend[e.category] || 0) + (e.baseAmount || e.amount);
     });
 
     const categoryPredictions = Object.entries(catSpend).map(([cat, spent]) => ({
@@ -36,7 +37,7 @@ export async function getSpendingPredictions(userId) {
     const dayOfWeekCount = [0, 0, 0, 0, 0, 0, 0];
     expenses.forEach(e => {
         const dow = new Date(e.date).getDay();
-        dayOfWeekSpend[dow] += e.amount;
+        dayOfWeekSpend[dow] += (e.baseAmount || e.amount);
         dayOfWeekCount[dow]++;
     });
 

@@ -31,7 +31,6 @@ const OTPVerification = ({ email, onVerify, onResend, onCancel, isLoading }) => 
         newOtp[index] = value.substring(value.length - 1);
         setOtp(newOtp);
 
-        // Move to next input if value is entered
         if (value && index < 5) {
             inputRefs.current[index + 1].focus();
         }
@@ -47,13 +46,13 @@ const OTPVerification = ({ email, onVerify, onResend, onCancel, isLoading }) => 
         e.preventDefault();
         const data = e.clipboardData.getData('text').slice(0, 6);
         if (!/^\d+$/.test(data)) return;
-        
+
         const newOtp = [...otp];
         data.split('').forEach((char, i) => {
             if (i < 6) newOtp[i] = char;
         });
         setOtp(newOtp);
-        
+
         const nextIndex = data.length < 6 ? data.length : 5;
         inputRefs.current[nextIndex].focus();
     };
@@ -83,7 +82,7 @@ const OTPVerification = ({ email, onVerify, onResend, onCancel, isLoading }) => 
                 <button className="otp-back-btn" onClick={onCancel}>
                     <ArrowLeft size={20} />
                 </button>
-                
+
                 <div className="otp-header">
                     <div className="otp-icon-wrapper">
                         <ShieldCheck size={32} className="otp-icon" />
@@ -111,9 +110,9 @@ const OTPVerification = ({ email, onVerify, onResend, onCancel, isLoading }) => 
                         ))}
                     </div>
 
-                    <Button 
-                        type="submit" 
-                        variant="primary" 
+                    <Button
+                        type="submit"
+                        variant="primary"
                         className="otp-submit-btn"
                         isLoading={isLoading}
                         disabled={otp.some(d => d === '')}
@@ -124,8 +123,8 @@ const OTPVerification = ({ email, onVerify, onResend, onCancel, isLoading }) => 
 
                 <div className="otp-footer">
                     <p>Didn't receive the code?</p>
-                    <button 
-                        type="button" 
+                    <button
+                        type="button"
                         className={`resend-btn ${!canResend ? 'disabled' : ''}`}
                         onClick={handleResend}
                         disabled={!canResend || isLoading}

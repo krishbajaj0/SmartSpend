@@ -1,137 +1,281 @@
-.smart-search {
+.smart-search-premium {
     margin-bottom: var(--space-xl);
+    width: 100%;
+    max-width: 800px;
 }
 
-.smart-search-bar {
+.smart-search-bar-wrap {
     position: relative;
     display: flex;
     align-items: center;
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    padding: 6px;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.3);
 }
 
-.smart-search-bar input {
-    width: 100%;
-    padding: 14px 14px 14px 44px;
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-xl);
-    background: var(--bg-card);
-    color: var(--text-primary);
-    font-size: 0.95rem;
-    font-family: var(--font-body);
-    outline: none;
-    transition: all 0.3s ease;
-}
-
-.smart-search-bar input:focus {
+.smart-search-bar-wrap:focus-within {
     border-color: var(--accent-primary);
-    box-shadow: 0 0 0 3px rgba(108, 92, 231, 0.15);
+    background: rgba(255, 255, 255, 0.06);
+    box-shadow: 0 15px 40px -12px rgba(108, 92, 231, 0.25);
+    transform: translateY(-2px);
 }
 
-.smart-search-bar .search-icon {
-    position: absolute;
-    left: 14px;
-    color: var(--text-tertiary);
-    pointer-events: none;
-    transition: color 0.3s;
-}
-
-.smart-search-bar input:focus ~ .search-icon,
-.smart-search-bar:focus-within .search-icon {
+.search-icon-box {
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     color: var(--accent-primary);
 }
 
-.smart-search-bar .search-loading {
-    position: absolute;
-    right: 14px;
+.ai-icon {
+    filter: drop-shadow(0 0 8px var(--accent-primary));
+    animation: pulse-glow 3s infinite;
+}
+
+@keyframes pulse-glow {
+    0%, 100% { opacity: 0.8; filter: drop-shadow(0 0 5px var(--accent-primary)); }
+    50% { opacity: 1; filter: drop-shadow(0 0 12px var(--accent-primary)); }
+}
+
+.smart-search-bar-wrap input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    padding: 12px 10px;
+    color: var(--text-primary);
+    font-size: 1rem;
+    font-family: var(--font-body);
+}
+
+.smart-search-bar-wrap input::placeholder {
+    color: var(--text-tertiary);
+    opacity: 0.6;
+}
+
+.search-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-right: 8px;
+}
+
+.clear-btn, .submit-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+}
+
+.clear-btn {
+    background: transparent;
+    color: var(--text-tertiary);
+}
+
+.clear-btn:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+}
+
+.submit-btn {
+    background: var(--accent-primary);
+    color: white;
+}
+
+.submit-btn:hover:not(:disabled) {
+    transform: scale(1.05);
+    filter: brightness(1.1);
+}
+
+.submit-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.search-loader {
     width: 20px;
     height: 20px;
-    border: 2px solid var(--border-subtle);
+    border: 2px solid rgba(255, 255, 255, 0.1);
     border-top-color: var(--accent-primary);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
+    margin-right: 8px;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
 }
 
 .smart-search-suggestions {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-xs);
-    margin-top: var(--space-sm);
-    padding-left: var(--space-xs);
+    justify-content: center;
+    gap: 10px;
+    margin-top: 16px;
 }
 
 .smart-search-suggestion {
-    background: var(--bg-card);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-pill);
-    padding: 4px 12px;
-    font-size: 0.75rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 8px 16px;
+    border-radius: 100px;
+    font-size: 0.85rem;
     color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.smart-search-suggestion:hover {
+    background: rgba(108, 92, 231, 0.1);
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+}
+
+/* ── Result Card ── */
+.smart-search-result-premium {
+    position: relative;
+    margin-top: 24px;
+    padding: 24px;
+    background: rgba(255, 255, 255, 0.04);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(108, 92, 231, 0.2);
+    border-radius: 24px;
+    overflow: hidden;
+}
+
+.smart-search-result-premium::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent-primary), transparent);
+}
+
+.result-close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.05);
+    border: none;
+    color: var(--text-tertiary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
     cursor: pointer;
     transition: all 0.2s;
 }
 
-.smart-search-suggestion:hover {
-    border-color: var(--accent-primary);
-    color: var(--accent-primary);
-    background: rgba(108, 92, 231, 0.05);
+.result-close:hover {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--danger);
 }
 
-/* ── Result Card ── */
-.smart-search-result {
-    margin-top: var(--space-md);
-    padding: var(--space-lg);
-    border-radius: var(--radius-lg);
-    background: linear-gradient(135deg, rgba(108, 92, 231, 0.08), rgba(0, 206, 201, 0.05));
-    border: 1px solid rgba(108, 92, 231, 0.15);
+.result-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--accent-primary);
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 12px;
 }
 
 .smart-search-response {
-    font-size: 1.1rem;
-    font-weight: 600;
+    font-size: 1.2rem;
+    line-height: 1.6;
     color: var(--text-primary);
-    margin-bottom: var(--space-md);
-    line-height: 1.5;
+    margin-bottom: 24px;
+    max-width: 90%;
 }
 
 .smart-search-details {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-lg);
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 20px;
+    padding: 20px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 20px;
+    margin-bottom: 24px;
 }
 
 .smart-search-detail {
     text-align: center;
 }
 
-.smart-search-detail .detail-value {
-    font-size: 1.3rem;
-    font-weight: 700;
+.detail-value {
+    font-size: 1.5rem;
+    font-weight: 800;
     color: var(--accent-primary);
+    font-family: var(--font-display);
 }
 
-.smart-search-detail .detail-label {
+.detail-label {
     font-size: 0.75rem;
-    color: var(--text-secondary);
-    margin-top: 2px;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 4px;
 }
 
 .smart-search-categories {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-sm);
-    margin-top: var(--space-sm);
+    gap: 12px;
 }
 
-.smart-search-cat-chip {
+.smart-search-cat-card {
     display: flex;
     align-items: center;
-    gap: 4px;
-    padding: 4px 10px;
-    border-radius: var(--radius-md);
-    background: var(--bg-card);
-    font-size: 0.8rem;
+    gap: 10px;
+    padding: 10px 16px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    transition: all 0.2s;
+}
+
+.smart-search-cat-card:hover {
+    background: rgba(255, 255, 255, 0.06);
+    transform: translateY(-2px);
+}
+
+.cat-icon {
+    font-size: 1.2rem;
+}
+
+.cat-name {
+    font-size: 0.85rem;
     color: var(--text-secondary);
 }
 
-.smart-search-cat-chip strong {
+.cat-total {
+    font-size: 0.9rem;
+    font-weight: 700;
     color: var(--text-primary);
+}
+
+.has-error {
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
+.has-error .result-header {
+    color: var(--danger);
 }

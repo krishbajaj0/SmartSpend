@@ -6,7 +6,7 @@
 .input-wrapper input,
 .input-wrapper textarea {
     width: 100%;
-    padding: 16px 16px 8px;
+    padding: 24px 16px 8px;
     background: var(--bg-input);
     border: 1.5px solid var(--border-subtle);
     border-radius: var(--radius-md);
@@ -17,6 +17,10 @@
 
 .input-wrapper input.has-icon {
     padding-left: 44px;
+}
+
+.input-wrapper input.has-action {
+    padding-right: 44px;
 }
 
 .input-wrapper.focused input,
@@ -74,6 +78,28 @@
 .input-icon svg {
     width: 18px;
     height: 18px;
+}
+
+.input-action {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-tertiary);
+    z-index: 1;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 50%;
+    transition: color 0.2s;
+}
+
+.input-action:hover {
+    color: var(--text-primary);
 }
 
 .input-wrapper.focused .input-icon {

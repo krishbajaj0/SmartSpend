@@ -108,6 +108,192 @@
     background: var(--success) !important;
 }
 
+/* ── Login Mode Toggle ── */
+.login-mode-toggle {
+    display: flex;
+    position: relative;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+    padding: 4px;
+    margin-bottom: var(--space-lg);
+    overflow: hidden;
+}
+
+.login-mode-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 16px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: color 0.25s ease;
+    position: relative;
+    z-index: 1;
+    border-radius: var(--radius-md);
+}
+
+.login-mode-btn.active {
+    color: #fff;
+}
+
+.login-mode-btn:hover:not(.active) {
+    color: var(--text-primary);
+}
+
+.login-mode-slider {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    width: calc(50% - 4px);
+    height: calc(100% - 8px);
+    background: var(--accent-gradient);
+    border-radius: var(--radius-md);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 0;
+}
+
+/* ── OTP Description ── */
+.otp-description {
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    text-align: center;
+    margin-bottom: var(--space-sm);
+}
+
+/* ── OTP Sent Info ── */
+.otp-sent-info {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    padding: 10px 16px;
+    background: rgba(99, 102, 241, 0.08);
+    border: 1px solid rgba(99, 102, 241, 0.15);
+    border-radius: var(--radius-md);
+}
+
+.otp-sent-info strong {
+    color: var(--accent-primary);
+}
+
+.otp-sent-icon {
+    color: var(--accent-primary);
+    flex-shrink: 0;
+}
+
+/* ── OTP Digit Inputs ── */
+.otp-inputs-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.otp-inputs {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+}
+
+.otp-digit-input {
+    width: 48px;
+    height: 56px;
+    text-align: center;
+    font-size: 1.4rem;
+    font-weight: 700;
+    letter-spacing: 0;
+    border: 2px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    outline: none;
+    transition: all 0.2s ease;
+    caret-color: var(--accent-primary);
+}
+
+.otp-digit-input:focus {
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+    background: var(--bg-primary);
+}
+
+.otp-digit-input.filled {
+    border-color: var(--accent-primary);
+    background: rgba(99, 102, 241, 0.06);
+}
+
+.otp-digit-input.error {
+    border-color: var(--danger);
+    animation: otp-shake 0.4s ease;
+}
+
+@keyframes otp-shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-4px); }
+    40% { transform: translateX(4px); }
+    60% { transform: translateX(-3px); }
+    80% { transform: translateX(3px); }
+}
+
+.otp-error {
+    font-size: 0.8rem;
+    color: var(--danger);
+    text-align: center;
+    margin: 0;
+}
+
+/* ── OTP Actions ── */
+.otp-actions {
+    display: flex;
+    justify-content: center;
+    gap: var(--space-md);
+    margin-top: var(--space-sm);
+}
+
+.otp-resend-btn,
+.otp-change-email-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: none;
+    border: none;
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--accent-primary);
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    transition: all 0.2s ease;
+}
+
+.otp-resend-btn:hover:not(:disabled),
+.otp-change-email-btn:hover {
+    background: rgba(99, 102, 241, 0.08);
+    color: var(--accent-secondary);
+}
+
+.otp-resend-btn:disabled {
+    color: var(--text-tertiary);
+    cursor: not-allowed;
+}
+
+.spin {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
 /* ── Password Strength ── */
 .password-strength {
     display: flex;

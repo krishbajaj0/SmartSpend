@@ -15,7 +15,6 @@ export default function ForgotPasswordPage() {
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [loading, setLoading] = useState(false);
-    const [errorMsg, setErrorMsg] = useState('');
     
     const { forgotPassword, resetPassword } = useAuth();
     const { success, error } = useToast();
@@ -218,3 +217,4 @@ export default function ForgotPasswordPage() {
         </div>
     );
 }
+

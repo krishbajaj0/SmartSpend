@@ -1,9 +1,10 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Plus, Search, Grid3x3, List, ChevronLeft, ChevronRight,
     Calendar, ArrowUpDown, ArrowUp, ArrowDown, Repeat,
+    Trash2, CheckSquare, Square, X,
 } from 'lucide-react';
 import { format, subDays, isAfter } from 'date-fns';
 import GlassCard from '../components/ui/GlassCard';
@@ -12,10 +13,12 @@ import Input from '../components/ui/Input';
 import Dropdown from '../components/ui/Dropdown';
 import CategoryBadge, { CATEGORIES } from '../components/ui/CategoryBadge';
 import EmptyState from '../components/ui/EmptyState';
-import ExpenseFormModal from '../components/expenses/ExpenseFormModal';
+import TransactionModal from '../components/expenses/TransactionModal';
 import ExpenseDetail from '../components/expenses/ExpenseDetail';
 import { useToast } from '../context/ToastContext';
-import { expensesAPI } from '../utils/api';
+import { useAuth } from '../context/AuthContext';
+import { expensesAPI, transactionsAPI } from '../utils/api';
+import { formatCurrency } from '../utils/currency';
 import './ExpensesPage.css';
 
 const ITEMS_PER_PAGE = 10;
@@ -40,12 +43,35 @@ const sortOptions = [
 export default function ExpensesPage() {
     const outletContext = useOutletContext() || {};
     const { showAddExpense, setShowAddExpense } = outletContext;
+    const { user } = useAuth();
+    const currency = user?.currency || 'INR';
 
     const [expenses, setExpenses] = useState([]);
     const [loadingData, setLoadingData] = useState(true);
 
     // Filters
+    const [inputValue, setInputValue] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
+    const [isSearching, setIsSearching] = useState(false);
+    const searchTimeout = useRef(null);
+
+    const handleSearchChange = useCallback((value) => {
+        setIsSearching(true);
+        if (searchTimeout.current) clearTimeout(searchTimeout.current);
+
+        searchTimeout.current = setTimeout(() => {
+            setSearchQuery(value);
+            setCurrentPage(1);
+            setIsSearching(false);
+        }, 400);
+    }, []);
+
+    useEffect(() => {
+        return () => {
+            if (searchTimeout.current) clearTimeout(searchTimeout.current);
+        };
+    }, []);
+
     const [categoryFilter, setCategoryFilter] = useState('');
     const [dateRange, setDateRange] = useState(0);
     const [sortBy, setSortBy] = useState('date-desc');
@@ -53,6 +79,10 @@ export default function ExpensesPage() {
     // View state
     const [viewMode, setViewMode] = useState('card');
     const [currentPage, setCurrentPage] = useState(1);
+
+    // Multi-select state
+    const [selectedIds, setSelectedIds] = useState(new Set());
+    const [bulkDeleting, setBulkDeleting] = useState(false);
 
     // Modals / panels
     const [formOpen, setFormOpen] = useState(false);
@@ -71,28 +101,28 @@ export default function ExpensesPage() {
         }
     }, [showAddExpense, setShowAddExpense]);
 
-    // ── Fetch expenses from API ──
-    const fetchExpenses = useCallback(async () => {
-        try {
-            setLoadingData(true);
-            const res = await expensesAPI.list({ limit: 200, sortBy: 'date', sortOrder: 'desc' });
-            setExpenses(res.data.expenses || []);
-        } catch (err) {
-            addToast('Failed to load expenses', { type: 'error' });
-        } finally {
-            setLoadingData(false);
-        }
+    useEffect(() => {
+        const controller = new AbortController();
+        const fetchTransactions = async () => {
+            try {
+                setLoadingData(true);
+                const res = await transactionsAPI.list(
+                    { limit: 200 },
+                    { signal: controller.signal }
+                );
+                setExpenses(res.data.transactions || []);
+            } catch (err) {
+                if (err.name !== 'CanceledError' && err.code !== 'ERR_CANCELED') {
+                    addToast('Failed to load transactions', { type: 'error' });
+                }
+            } finally {
+                setLoadingData(false);
+            }
+        };
+
+        fetchTransactions();
+        return () => controller.abort();
     }, [addToast]);
-
-    // Silent refetch — doesn't show loading spinner (prevents modal unmount)
-    const refetchExpenses = useCallback(async () => {
-        try {
-            const res = await expensesAPI.list({ limit: 200, sortBy: 'date', sortOrder: 'desc' });
-            setExpenses(res.data.expenses || []);
-        } catch { /* silent */ }
-    }, []);
-
-    useEffect(() => { fetchExpenses(); }, [fetchExpenses]);
 
     // ── Filtered + sorted data ──
     const filteredExpenses = useMemo(() => {
@@ -156,13 +186,24 @@ export default function ExpensesPage() {
                 addToast('Expense updated!', { type: 'success' });
 
             } else {
-                const res = await expensesAPI.create(data);
+                let res;
+                if (data.type === 'EXPENSE') {
+                    res = await transactionsAPI.createExpense(data);
+                } else if (data.type === 'INCOME') {
+                    res = await transactionsAPI.createIncome(data);
+                } else if (data.type === 'TRANSFER') {
+                    res = await transactionsAPI.createTransfer(data);
+                }
 
-                const newExpense = res.data.expense || res.data;
-
-                setExpenses(prev => [newExpense, ...prev]);
-
-                addToast('Expense added!', { type: 'success' });
+                // For simplicity, we'll refetch or add the transaction if it's an expense
+                // Since ExpensesPage primarily shows expenses, we only add to list if it's an expense
+                if (data.type === 'EXPENSE') {
+                    const newExpense = res.data.expense || res.data;
+                    setExpenses(prev => [newExpense, ...prev]);
+                    addToast('Expense added!', { type: 'success' });
+                } else {
+                    addToast(`${data.type.charAt(0) + data.type.slice(1).toLowerCase()} recorded!`, { type: 'success' });
+                }
             }
 
             setFormOpen(false);
@@ -181,7 +222,7 @@ export default function ExpensesPage() {
             addToast('Expense deleted.', { type: 'success' });
             setDetailOpen(false);
             window.dispatchEvent(new Event('expenseUpdated'));
-        } catch (err) {
+        } catch {
             addToast('Failed to delete expense', { type: 'error' });
         }
     }
@@ -212,6 +253,42 @@ export default function ExpensesPage() {
 
     const hasActiveFilters = searchQuery || categoryFilter || dateRange > 0 || sortBy !== 'date-desc';
 
+    // ── Multi-select helpers ──
+    function toggleSelect(id) {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    }
+
+    function toggleSelectAll() {
+        if (selectedIds.size === paginatedExpenses.length) {
+            setSelectedIds(new Set());
+        } else {
+            setSelectedIds(new Set(paginatedExpenses.map(e => e._id || e.id)));
+        }
+    }
+
+    async function handleBulkDelete() {
+        if (selectedIds.size === 0) return;
+        const count = selectedIds.size;
+        if (!window.confirm(`Delete ${count} selected expense${count > 1 ? 's' : ''}? This cannot be undone.`)) return;
+        try {
+            setBulkDeleting(true);
+            await expensesAPI.bulkDelete([...selectedIds]);
+            setExpenses(prev => prev.filter(e => !selectedIds.has(e._id) && !selectedIds.has(e.id)));
+            addToast(`${count} expense${count > 1 ? 's' : ''} deleted`, { type: 'success' });
+            setSelectedIds(new Set());
+            window.dispatchEvent(new Event('expenseUpdated'));
+        } catch {
+            addToast('Failed to delete expenses', { type: 'error' });
+        } finally {
+            setBulkDeleting(false);
+        }
+    }
+
     function getSortIcon(field) {
         const [currentField, dir] = sortBy.split('-');
         if (currentField !== field) return <ArrowUpDown size={12} />;
@@ -241,11 +318,11 @@ export default function ExpensesPage() {
             {/* ── Page Header ── */}
             <div className="expenses-page-header">
                 <div className="expenses-page-header-left">
-                    <h1>Expenses</h1>
+                    <h1>Transactions</h1>
                     <span className="expenses-count">{filteredExpenses.length} items</span>
                 </div>
                 <Button variant="primary" icon={<Plus size={18} />} onClick={openAdd}>
-                    Add Expense
+                    Add Transaction
                 </Button>
             </div>
 
@@ -253,10 +330,13 @@ export default function ExpensesPage() {
             <div className="expenses-filter-bar">
                 <Input
                     label="Search"
-                    value={searchQuery}
-                    onChange={e => setFilterAndResetPage(setSearchQuery)(e.target.value)}
+                    value={inputValue}
+                    onChange={e => {
+                        setInputValue(e.target.value);
+                        handleSearchChange(e.target.value);
+                    }}
                     placeholder="Search merchants..."
-                    icon={<Search size={16} />}
+                    icon={isSearching ? <div className="loading-spinner" style={{width: 12, height: 12, borderWidth: 2}} /> : <Search size={16} />}
                 />
                 <Dropdown
                     label="Category"
@@ -298,10 +378,22 @@ export default function ExpensesPage() {
 
             {/* ── Toolbar ── */}
             <div className="expenses-toolbar">
-                <span className="expenses-sort-info">
-                    Showing <strong>{paginatedExpenses.length}</strong> of{' '}
-                    <strong>{filteredExpenses.length}</strong> expenses
-                </span>
+                <div className="expenses-toolbar-left">
+                    <button
+                        className="select-all-btn"
+                        onClick={toggleSelectAll}
+                        title={selectedIds.size === paginatedExpenses.length ? 'Deselect all' : 'Select all'}
+                    >
+                        {selectedIds.size === paginatedExpenses.length && paginatedExpenses.length > 0
+                            ? <CheckSquare size={16} />
+                            : <Square size={16} />
+                        }
+                    </button>
+                    <span className="expenses-sort-info">
+                        Showing <strong>{paginatedExpenses.length}</strong> of{' '}
+                        <strong>{filteredExpenses.length}</strong> transactions
+                    </span>
+                </div>
                 <div className="view-toggle">
                     <button
                         className={`view-toggle-btn ${viewMode === 'card' ? 'active' : ''}`}
@@ -330,11 +422,11 @@ export default function ExpensesPage() {
             {paginatedExpenses.length === 0 ? (
                 <div className="expenses-empty-wrapper">
                     <EmptyState
-                        title={expenses.length === 0 ? 'No expenses yet' : 'No expenses found'}
+                        title={expenses.length === 0 ? 'No transactions yet' : 'No transactions found'}
                         description={expenses.length === 0
-                            ? 'Add your first expense to get started.'
+                            ? 'Add your first transaction to get started.'
                             : 'Try adjusting your filters or search query.'}
-                        actionLabel={expenses.length === 0 ? 'Add Expense' : 'Clear Filters'}
+                        actionLabel={expenses.length === 0 ? 'Add Transaction' : 'Clear Filters'}
                         onAction={expenses.length === 0 ? openAdd : clearFilters}
                     />
                 </div>
@@ -360,10 +452,19 @@ export default function ExpensesPage() {
                                 transition={{ duration: 0.3 }}
                             >
                                 <GlassCard
-                                    className="expense-card"
+                                    className={`expense-card ${selectedIds.has(exp._id || exp.id) ? 'selected' : ''}`}
                                     onClick={() => openDetail(exp)}
                                 >
                                     <div className="expense-card-top">
+                                        <button
+                                            className="expense-card-checkbox"
+                                            onClick={(e) => { e.stopPropagation(); toggleSelect(exp._id || exp.id); }}
+                                        >
+                                            {selectedIds.has(exp._id || exp.id)
+                                                ? <CheckSquare size={16} className="checked" />
+                                                : <Square size={16} />
+                                            }
+                                        </button>
                                         <div
                                             className="expense-card-icon"
                                             style={{ background: `${cat.color}20` }}
@@ -371,10 +472,10 @@ export default function ExpensesPage() {
                                             {cat.icon}
                                         </div>
                                         <span className="expense-card-amount">
-                                            ₹{(exp.amount || 0).toLocaleString('en-IN')}
+                                            {formatCurrency(exp.amount || 0, currency)}
                                         </span>
                                     </div>
-                                    <div className="expense-card-merchant">{exp.merchant}</div>
+                                    <div className="expense-card-merchant">{exp.merchant || exp.note || 'Transaction'}</div>
                                     <div className="expense-card-meta">
                                         <CategoryBadge category={exp.category} size="sm" />
                                         <span className="expense-card-date">
@@ -402,6 +503,14 @@ export default function ExpensesPage() {
                     <table className="expenses-table">
                         <thead>
                             <tr>
+                                <th className="th-checkbox">
+                                    <button className="table-checkbox-btn" onClick={toggleSelectAll}>
+                                        {selectedIds.size === paginatedExpenses.length && paginatedExpenses.length > 0
+                                            ? <CheckSquare size={14} />
+                                            : <Square size={14} />
+                                        }
+                                    </button>
+                                </th>
                                 <th>Category</th>
                                 <th
                                     className={sortBy.startsWith('merchant') ? 'sorted' : ''}
@@ -429,7 +538,6 @@ export default function ExpensesPage() {
                         </thead>
                         <tbody>
                             {paginatedExpenses.map((exp, i) => {
-                                const cat = CATEGORIES[exp.category] || CATEGORIES.other;
                                 return (
                                     <motion.tr
                                         key={exp._id || exp.id}
@@ -438,12 +546,23 @@ export default function ExpensesPage() {
                                         animate={{ opacity: 1 }}
                                         transition={{ delay: i * 0.03 }}
                                     >
+                                        <td className="td-checkbox">
+                                            <button
+                                                className="table-checkbox-btn"
+                                                onClick={(e) => { e.stopPropagation(); toggleSelect(exp._id || exp.id); }}
+                                            >
+                                                {selectedIds.has(exp._id || exp.id)
+                                                    ? <CheckSquare size={14} className="checked" />
+                                                    : <Square size={14} />
+                                                }
+                                            </button>
+                                        </td>
                                         <td>
                                             <CategoryBadge category={exp.category} size="sm" />
                                         </td>
                                         <td className="table-merchant">{exp.merchant}</td>
                                         <td className="table-amount">
-                                            ₹{(exp.amount || 0).toLocaleString('en-IN')}
+                                            {formatCurrency(exp.amount || 0, currency)}
                                         </td>
                                         <td className="table-date">
                                             {format(new Date(exp.date), 'MMM d, yyyy')}
@@ -487,11 +606,11 @@ export default function ExpensesPage() {
             )}
 
             {/* ── Add / Edit Modal ── */}
-            <ExpenseFormModal
+            <TransactionModal
                 isOpen={formOpen}
                 onClose={() => { setFormOpen(false); setEditingExpense(null); }}
                 onSubmit={handleAddOrEdit}
-                expense={editingExpense}
+                transaction={editingExpense}
             />
 
             {/* ── Detail Panel ── */}
@@ -501,7 +620,39 @@ export default function ExpensesPage() {
                 onClose={() => setDetailOpen(false)}
                 onEdit={openEdit}
                 onDelete={handleDelete}
+                currency={currency}
             />
+
+            {/* ── Floating Bulk Action Bar ── */}
+            <AnimatePresence>
+                {selectedIds.size > 0 && (
+                    <motion.div
+                        className="bulk-action-bar"
+                        initial={{ opacity: 0, y: 40 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 40 }}
+                        transition={{ type: 'spring', damping: 20, stiffness: 300 }}
+                    >
+                        <span className="bulk-action-count">
+                            {selectedIds.size} selected
+                        </span>
+                        <button
+                            className="bulk-action-delete"
+                            onClick={handleBulkDelete}
+                            disabled={bulkDeleting}
+                        >
+                            <Trash2 size={14} />
+                            {bulkDeleting ? 'Deleting...' : 'Delete'}
+                        </button>
+                        <button
+                            className="bulk-action-cancel"
+                            onClick={() => setSelectedIds(new Set())}
+                        >
+                            <X size={14} />
+                        </button>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }

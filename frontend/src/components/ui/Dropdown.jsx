@@ -33,6 +33,7 @@ export default function Dropdown({
                 type="button"
             >
                 <span className={selected ? 'dropdown-value' : 'dropdown-placeholder'}>
+                    {selected?.icon && <span className="dropdown-item-icon">{selected.icon}</span>}
                     {selected ? selected.label : placeholder}
                 </span>
                 <motion.span

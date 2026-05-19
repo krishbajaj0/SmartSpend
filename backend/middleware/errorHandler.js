@@ -1,3 +1,5 @@
+import logger from '../config/logger.js';
+
 /**
  * Custom application error with HTTP status code.
  */
@@ -36,6 +38,14 @@ export function errorHandler(err, req, res, _next) {
         message = `Invalid ${err.path}: ${err.value}`;
     }
 
+    // MongoDB query exceeded maxTimeMS — server-side timeout.
+    // Return 503 (Service Unavailable) not 500 — this is an overload/capacity
+    // issue, not an application bug. Log as warn, not error.
+    if (err.code === 50 || err.codeName === 'MaxTimeMSExpired') {
+        statusCode = 503;
+        message    = 'Database query timed out. Please try again or narrow your request.';
+    }
+
     // JWT errors
     if (err.name === 'JsonWebTokenError') {
         statusCode = 401;
@@ -46,7 +56,12 @@ export function errorHandler(err, req, res, _next) {
         message = 'Token expired';
     }
 
-    console.error(`[ERROR] ${statusCode} - ${message}${err.stack ? '\n' + err.stack : ''}`);
+    // Route 5xx through logger.error, 4xx through logger.warn.
+    // Exception: DB timeouts (code 50) are a capacity/infrastructure issue —
+    // log as WARN to avoid alert fatigue from log-based 5xx monitors.
+    const isDbTimeout = err.code === 50 || err.codeName === 'MaxTimeMSExpired';
+    const logFn = (statusCode >= 500 && !isDbTimeout) ? logger.error : logger.warn;
+    logFn({ err, statusCode, url: req.originalUrl, method: req.method }, message);
 
     res.status(statusCode).json({
         success: false,

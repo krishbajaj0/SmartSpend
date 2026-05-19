@@ -404,3 +404,142 @@
     align-items: flex-start;
   }
 }
+
+/* ── Multi-select & Bulk Actions ── */
+
+.expenses-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.select-all-btn {
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  transition: color 0.2s;
+}
+
+.select-all-btn:hover {
+  color: var(--accent-primary);
+}
+
+.expense-card.selected {
+  border-color: var(--accent-primary) !important;
+  box-shadow: 0 0 0 1px var(--accent-primary), var(--shadow-glow);
+}
+
+.expense-card-checkbox {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-tertiary);
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  transition: color 0.15s;
+  flex-shrink: 0;
+}
+
+.expense-card-checkbox:hover {
+  color: var(--accent-primary);
+}
+
+.expense-card-checkbox .checked {
+  color: var(--accent-primary);
+}
+
+.th-checkbox,
+.td-checkbox {
+  width: 36px !important;
+  padding-left: var(--space-md) !important;
+  padding-right: 0 !important;
+}
+
+.table-checkbox-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-tertiary);
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  transition: color 0.15s;
+}
+
+.table-checkbox-btn:hover {
+  color: var(--accent-primary);
+}
+
+.table-checkbox-btn .checked {
+  color: var(--accent-primary);
+}
+
+.bulk-action-bar {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  border-radius: 16px;
+  background: rgba(30, 30, 46, 0.92);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(139, 92, 246, 0.15);
+  z-index: 100;
+}
+
+.bulk-action-count {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  padding-right: 4px;
+}
+
+.bulk-action-delete {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 10px;
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.bulk-action-delete:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.25);
+}
+
+.bulk-action-delete:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.bulk-action-cancel {
+  display: flex;
+  align-items: center;
+  padding: 6px;
+  border-radius: 8px;
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.bulk-action-cancel:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.06);
+}

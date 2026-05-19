@@ -1,4 +1,4 @@
-import { subDays, format, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
+import { subDays, format, startOfMonth, endOfMonth } from 'date-fns';
 
 // ── Categories ──
 export const categories = [

@@ -20,8 +20,32 @@
 }
 
 .transactions-list-premium {
-    padding: var(--space-md);
-    padding-top: 0;
+    padding: 0 var(--space-md) var(--space-md);
+    max-height: 440px;
+    overflow-y: auto;
+    mask-image: linear-gradient(
+        to bottom,
+        transparent,
+        black 24px,
+        black calc(100% - 24px),
+        transparent
+    );
+    -webkit-mask-image: linear-gradient(
+        to bottom,
+        transparent,
+        black 24px,
+        black calc(100% - 24px),
+        transparent
+    );
+}
+
+.transactions-list-premium::-webkit-scrollbar {
+    width: 4px;
+}
+
+.transactions-list-premium::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-full);
 }
 
 .transactions-empty {
@@ -34,18 +58,16 @@
     display: flex;
     align-items: center;
     gap: var(--space-md);
-    padding: var(--space-md);
-    border-radius: var(--radius-lg);
+    padding: 12px var(--space-md);
+    border-radius: var(--radius-md);
     cursor: pointer;
-    transition: all var(--transition-fast);
-    margin-bottom: 4px;
-    border: 1px solid transparent;
+    transition: background 180ms ease;
+    margin-bottom: 0;
+    border: none;
 }
 
 .transaction-row-premium:hover {
-    background: var(--bg-hover);
-    border-color: var(--border-subtle);
-    transform: translateX(4px);
+    background: rgba(255, 255, 255, 0.04);
 }
 
 .transaction-icon-premium {
@@ -64,23 +86,61 @@
 }
 
 .transaction-merchant {
-    display: block;
-    font-size: 0.9375rem;
+    font-size: 0.95rem;
     font-weight: 600;
     color: var(--text-primary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+}
+
+.transaction-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2px;
+}
+
+.transaction-subtitle-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.transaction-account {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    background: rgba(255, 255, 255, 0.04);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 500;
+}
+
+.transaction-time-dot {
+    color: var(--text-tertiary);
+    font-size: 0.6rem;
 }
 
 .transaction-time {
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
     color: var(--text-tertiary);
 }
 
+.merchant-initial {
+    font-weight: 800;
+    font-size: 1.1rem;
+    font-family: var(--font-display);
+}
+
+.cat-icon-small {
+    font-size: 1.1rem;
+}
+
 .transaction-amount-premium {
-    font-size: 0.9375rem;
+    font-size: 0.95rem;
     font-weight: 700;
     color: var(--text-primary);
-    white-space: nowrap;
 }
+
+.transaction-amount-premium.income {
+    color: #10b981;
+}
+
+

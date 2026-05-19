@@ -74,14 +74,18 @@ export default function StatCard({
             animate="visible"
             transition={{ delay, duration: 0.5 }}
             className="stat-card-premium"
-            style={{ '--card-color': color }}
+            style={{ 
+                '--card-color': color,
+                '--card-bg': `${color}08`,
+                '--card-bg-gradient': `linear-gradient(135deg, ${color}15 0%, ${color}08 100%)`,
+                background: `linear-gradient(135deg, ${color}15 0%, ${color}05 100%)`
+            }}
             whileHover={{ y: -6, transition: { duration: 0.2 } }}
         >
-            <div className="stat-card-glow" style={{ background: `radial-gradient(600px circle at 50% 0%, ${color}20, transparent 40%)` }} />
             <div className="stat-card-accent" style={{ background: `linear-gradient(90deg, ${color}00, ${color}40, ${color}00)` }} />
             <div className="stat-card-header-premium">
                 <span className="stat-card-label-premium">{label}</span>
-                <div className="stat-card-icon-premium" style={{ 
+                <div className="stat-card-icon-premium" style={{
                     background: `${color}15`,
                     border: `1px solid ${color}30`
                 }}>

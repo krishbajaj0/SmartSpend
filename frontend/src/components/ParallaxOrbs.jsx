@@ -10,32 +10,34 @@ const orbConfigs = [
     { size: 150, color: 'rgba(162, 155, 254, 0.12)', top: '50%', left: '50%', speed: 0.35 },
 ];
 
+function ParallaxOrb({ orb, scrollYProgress }) {
+    const y = useTransform(scrollYProgress, [0, 1], [0, -100 * orb.speed]);
+    return (
+        <motion.div
+            className="parallax-orb"
+            style={{
+                width: orb.size,
+                height: orb.size,
+                background: `radial-gradient(circle, ${orb.color}, transparent 70%)`,
+                top: orb.top,
+                left: orb.left,
+                right: orb.right,
+                bottom: orb.bottom,
+                y,
+            }}
+        />
+    );
+}
+
 export default function ParallaxOrbs({ className = '' }) {
     const containerRef = useRef(null);
     const { scrollYProgress } = useScroll();
 
     return (
         <div ref={containerRef} className={`parallax-orbs ${className}`}>
-            {orbConfigs.map((orb, i) => {
-                const y = useTransform(scrollYProgress, [0, 1], [0, -100 * orb.speed]);
-
-                return (
-                    <motion.div
-                        key={i}
-                        className="parallax-orb"
-                        style={{
-                            width: orb.size,
-                            height: orb.size,
-                            background: `radial-gradient(circle, ${orb.color}, transparent 70%)`,
-                            top: orb.top,
-                            left: orb.left,
-                            right: orb.right,
-                            bottom: orb.bottom,
-                            y,
-                        }}
-                    />
-                );
-            })}
+            {orbConfigs.map((orb, i) => (
+                <ParallaxOrb key={i} orb={orb} scrollYProgress={scrollYProgress} />
+            ))}
         </div>
     );
 }

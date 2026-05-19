@@ -1,5 +1,8 @@
 # Environment variables
 .env
+.env.*
+token.txt
+backend/token.txt
 
 # Patches and reports
 *.patch
@@ -30,3 +33,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Uploads (user-generated)
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Build and coverage directories
+build/
+coverage/

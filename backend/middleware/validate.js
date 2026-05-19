@@ -44,6 +44,10 @@ export function validate(schema) {
                 errors.push(`${field} must be at least ${rules.minLength} characters`);
             }
 
+            if (rules.maxLength !== undefined && typeof value === 'string' && value.length > rules.maxLength) {
+                errors.push(`${field} must be at most ${rules.maxLength} characters`);
+            }
+
             if (rules.enum && !rules.enum.includes(value)) {
                 errors.push(`${field} must be one of: ${rules.enum.join(', ')}`);
             }

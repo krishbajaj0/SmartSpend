@@ -1,10 +1,13 @@
 import { useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Target } from 'lucide-react';
 import { getCategoryInfo } from '../ui/CategoryBadge';
+import { formatCurrency } from '../../utils/currency';
 import './BudgetHealth.css';
 
-export default function BudgetHealth({ budgets }) {
+export default function BudgetHealth({ budgets, currency = 'INR' }) {
+    const navigate = useNavigate();
     const sortedBudgets = useMemo(() => {
         return [...budgets]
             .filter(b => b.category !== 'overall')
@@ -39,7 +42,7 @@ export default function BudgetHealth({ budgets }) {
                         <p>No budgets set yet</p>
                         <button 
                             className="budget-create-btn"
-                            onClick={() => window.location.href = '/budgets'}
+                            onClick={() => navigate('/budgets')}
                         >
                             Create Budget
                         </button>
@@ -57,7 +60,7 @@ export default function BudgetHealth({ budgets }) {
                                         {cat.icon} {cat.label}
                                     </span>
                                     <span className="budget-health-values">
-                                        ₹{spent.toLocaleString()} / ₹{limit.toLocaleString()}
+                                        {formatCurrency(spent, currency)} / {formatCurrency(limit, currency)}
                                     </span>
                                 </div>
                                 <div className="budget-health-bar">

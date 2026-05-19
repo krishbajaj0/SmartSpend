@@ -1,10 +1,11 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Upload, Loader, CheckCircle, AlertTriangle, X, Save } from 'lucide-react';
 import Button from '../ui/Button';
 import Dropdown from '../ui/Dropdown';
 import { CATEGORIES } from '../ui/CategoryBadge';
-import { scanReceipt } from '../../utils/mockOcr';
+import { receiptsAPI } from '../../utils/api';
+import { formatCurrency } from '../../utils/currency';
 import './ReceiptUploader.css';
 
 const categoryOptions = Object.entries(CATEGORIES).map(([value, { label, icon }]) => ({
@@ -28,27 +29,43 @@ export default function ReceiptUploader({ onSaveExpense }) {
     const [previewUrl, setPreviewUrl] = useState(null);
     const [scanning, setScanning] = useState(false);
     const [ocrResult, setOcrResult] = useState(null);
+    const [receipt, setReceipt] = useState(null);
+    const [scanError, setScanError] = useState('');
     const [editedData, setEditedData] = useState({});
     const inputRef = useRef(null);
+
+    useEffect(() => () => {
+        if (previewUrl) URL.revokeObjectURL(previewUrl);
+    }, [previewUrl]);
 
     const handleFile = useCallback(async (f) => {
         if (!f || !f.type.startsWith('image/')) return;
         setFile(f);
-        setPreviewUrl(URL.createObjectURL(f));
+        setPreviewUrl(prev => {
+            if (prev) URL.revokeObjectURL(prev);
+            return URL.createObjectURL(f);
+        });
         setOcrResult(null);
+        setReceipt(null);
+        setScanError('');
         setScanning(true);
 
         try {
-            const result = await scanReceipt(f);
+            const formData = new FormData();
+            formData.append('receipt', f);
+            const res = await receiptsAPI.scan(formData);
+            const scannedReceipt = res.data.receipt;
+            const result = scannedReceipt.ocrData || {};
+            setReceipt(scannedReceipt);
             setOcrResult(result);
             setEditedData({
-                amount: String(result.amount.value),
-                date: result.date.value,
-                merchant: result.merchant.value,
-                category: result.suggestedCategory,
+                amount: String(result.amount?.value || ''),
+                date: result.date?.value || new Date().toISOString().slice(0, 10),
+                merchant: result.merchant?.value || '',
+                category: result.suggestedCategory || 'other',
             });
-        } catch {
-            // error handled silently for mock
+        } catch (err) {
+            setScanError(err.response?.data?.message || 'Receipt scan failed');
         } finally {
             setScanning(false);
         }
@@ -76,28 +93,33 @@ export default function ReceiptUploader({ onSaveExpense }) {
     }
 
     function reset() {
+        if (previewUrl) URL.revokeObjectURL(previewUrl);
         setFile(null);
         setPreviewUrl(null);
         setOcrResult(null);
+        setReceipt(null);
+        setScanError('');
         setEditedData({});
         setScanning(false);
         if (inputRef.current) inputRef.current.value = '';
     }
 
-    function handleSave() {
-        if (!ocrResult) return;
-        const expense = {
+    async function handleSave() {
+        if (!receipt) return;
+        const expenseData = {
             amount: parseFloat(editedData.amount),
             merchant: editedData.merchant,
             category: editedData.category,
             date: new Date(editedData.date).toISOString(),
             notes: '',
-            tags: [],
-            isRecurring: false,
-            receiptUrl: previewUrl,
         };
-        onSaveExpense(expense, file, ocrResult);
-        reset();
+        try {
+            const res = await receiptsAPI.linkExpense(receipt._id, expenseData);
+            onSaveExpense(res.data.expense, res.data.receipt);
+            reset();
+        } catch (err) {
+            setScanError(err.response?.data?.message || 'Failed to save receipt expense');
+        }
     }
 
     return (
@@ -149,6 +171,14 @@ export default function ReceiptUploader({ onSaveExpense }) {
                             </span>
                         </motion.div>
                     )}
+                    {scanError && (
+                        <div className="scan-overlay">
+                            <span className="scan-text">
+                                <AlertTriangle size={16} />
+                                {scanError}
+                            </span>
+                        </div>
+                    )}
                 </motion.div>
             )}
 
@@ -186,7 +216,7 @@ export default function ReceiptUploader({ onSaveExpense }) {
                                         step="0.01"
                                     />
                                 </div>
-                                <ConfidenceBadge confidence={ocrResult.amount.confidence} />
+                                <ConfidenceBadge confidence={ocrResult.amount?.confidence || 0} />
                             </motion.div>
 
                             {/* Merchant */}
@@ -205,7 +235,7 @@ export default function ReceiptUploader({ onSaveExpense }) {
                                         onChange={e => setEditedData(p => ({ ...p, merchant: e.target.value }))}
                                     />
                                 </div>
-                                <ConfidenceBadge confidence={ocrResult.merchant.confidence} />
+                                <ConfidenceBadge confidence={ocrResult.merchant?.confidence || 0} />
                             </motion.div>
 
                             {/* Date */}
@@ -224,7 +254,7 @@ export default function ReceiptUploader({ onSaveExpense }) {
                                         onChange={e => setEditedData(p => ({ ...p, date: e.target.value }))}
                                     />
                                 </div>
-                                <ConfidenceBadge confidence={ocrResult.date.confidence} />
+                                <ConfidenceBadge confidence={ocrResult.date?.confidence || 0} />
                             </motion.div>
 
                             {/* Category */}
@@ -257,7 +287,7 @@ export default function ReceiptUploader({ onSaveExpense }) {
                                 {ocrResult.lineItems.map((item, i) => (
                                     <div key={i} className="ocr-line-item">
                                         <span>{item.name}</span>
-                                        <span className="ocr-line-item-amount">₹{item.amount.toLocaleString('en-IN')}</span>
+                                        <span className="ocr-line-item-amount">{formatCurrency(item.amount)}</span>
                                     </div>
                                 ))}
                             </motion.div>

@@ -20,8 +20,9 @@ import './Sidebar.css';
 
 const navItems = [
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { path: '/expenses', label: 'Expenses', icon: Receipt },
-    { path: '/budgets', label: 'Budgets', icon: Wallet },
+    { path: '/accounts', label: 'Accounts', icon: Wallet },
+    { path: '/expenses', label: 'Transactions', icon: Receipt },
+    { path: '/budgets', label: 'Budgets', icon: Target },
     { path: '/analytics', label: 'Analytics', icon: PieChart },
     { path: '/receipts', label: 'Receipts', icon: Upload },
     { path: '/import', label: 'Import CSV', icon: FileSpreadsheet },
@@ -37,7 +38,7 @@ export default function Sidebar() {
     return (
         <motion.aside
             className={`sidebar ${collapsed ? 'collapsed' : ''}`}
-            animate={{ width: collapsed ? 70 : 250 }}
+            animate={{ width: collapsed ? 80 : 280 }}
             transition={{ duration: 0.3, ease: 'easeInOut' }}
         >
             <div className="sidebar-header">

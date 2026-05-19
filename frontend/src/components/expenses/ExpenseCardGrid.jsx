@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import { Calendar, Repeat } from 'lucide-react';
 import GlassCard from '../ui/GlassCard';
 import CategoryBadge, { CATEGORIES } from '../ui/CategoryBadge';
+import { formatCurrency } from '../../utils/currency';
 
 function formatExpenseDate(dateStr) {
     if (!dateStr) return '—';
@@ -16,7 +17,7 @@ function formatExpenseDate(dateStr) {
     }
 }
 
-function ExpenseCardGrid({ expenses, onExpenseClick }) {
+function ExpenseCardGrid({ expenses, onExpenseClick, currency = 'INR' }) {
     return (
         <motion.div
             className="expenses-card-grid"
@@ -50,7 +51,7 @@ function ExpenseCardGrid({ expenses, onExpenseClick }) {
                                     {cat.icon}
                                 </div>
                                 <span className="expense-card-amount">
-                                    ₹{(exp.amount || 0).toLocaleString('en-IN')}
+                                    {formatCurrency(exp.amount || 0, currency)}
                                 </span>
                             </div>
                             <div className="expense-card-merchant">{exp.merchant}</div>

@@ -1,10 +1,16 @@
+import { startTransactionIfSupported, commitTransactionIfSupported, abortTransactionIfSupported } from '../utils/session.js';
 import multer from 'multer';
 import fs from 'fs';
+import path from 'path';
+import crypto from 'crypto';
 import Receipt from '../models/Receipt.js';
-import Expense from '../models/Expense.js';
+import Transaction from '../models/Transaction.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { parseReceipt } from '../services/ocr/receiptParser.js';
 import constants from '../config/constants.js';
+import { invalidateUserDerivedCache } from '../utils/cache.js';
+import { writeAuditLog } from '../utils/audit.js';
+import { createExpenseTransaction, getOrCreateMigratedBalanceAccount } from '../services/transactionService.js';
 
 // Multer config
 const storage = multer.diskStorage({
@@ -14,7 +20,8 @@ const storage = multer.diskStorage({
         cb(null, dir);
     },
     filename: (req, file, cb) => {
-        cb(null, `${Date.now()}-${file.originalname}`);
+        const ext = path.extname(file.originalname || '').toLowerCase();
+        cb(null, `${crypto.randomUUID()}${ext}`);
     },
 });
 
@@ -48,6 +55,12 @@ export async function scanReceipt(req, res, next) {
             fileSize: req.file.size,
             ocrData: ocrResult,
         });
+        await writeAuditLog(req, {
+            entityType: 'receipt',
+            entityId: receipt._id,
+            action: 'scan',
+            after: receipt.toObject(),
+        });
 
         res.status(201).json({ success: true, receipt });
     } catch (err) { next(err); }
@@ -64,33 +77,86 @@ export async function getReceipts(req, res, next) {
 // GET /api/receipts/:id
 export async function getReceipt(req, res, next) {
     try {
-        const receipt = await Receipt.findOne({ _id: req.params.id, userId: req.user._id }).populate('linkedExpenseId');
+        const receipt = await Receipt.findOne({ _id: req.params.id, userId: req.user._id }).populate('linkedTransactionId');
         if (!receipt) throw new AppError('Receipt not found', 404);
         res.json({ success: true, receipt });
     } catch (err) { next(err); }
 }
 
-// POST /api/receipts/:id/link-expense — Create expense from receipt
-export async function linkExpense(req, res, next) {
+// GET /api/receipts/:id/file
+export async function getReceiptFile(req, res, next) {
     try {
         const receipt = await Receipt.findOne({ _id: req.params.id, userId: req.user._id });
         if (!receipt) throw new AppError('Receipt not found', 404);
 
-        const expenseData = {
+        const relative = receipt.fileUrl.replace(/^\/+/, '');
+        const root = path.resolve(process.cwd(), 'uploads');
+        const filePath = path.resolve(process.cwd(), relative);
+
+        if (!filePath.startsWith(root + path.sep)) {
+            throw new AppError('Invalid receipt path', 400);
+        }
+
+        res.setHeader('Cache-Control', 'private, no-store');
+        res.sendFile(filePath);
+    } catch (err) { next(err); }
+}
+
+// POST /api/receipts/:id/link-expense — Create expense from receipt
+export async function linkExpense(req, res, next) {
+    let session = null;
+    try {
+        const receipt = await Receipt.findOne({ _id: req.params.id, userId: req.user._id });
+        if (!receipt) throw new AppError('Receipt not found', 404);
+
+        session = await startTransactionIfSupported();
+
+        const amount = req.body.amount || receipt.ocrData?.amount?.value || 0;
+        let fromAccountId = req.body.fromAccountId;
+        
+        if (!fromAccountId) {
+            fromAccountId = await getOrCreateMigratedBalanceAccount(req.user._id, session);
+        }
+
+        const idempotencyKey = `receipt_expense_${receipt._id}`;
+
+        const expense = await createExpenseTransaction({
             userId: req.user._id,
-            amount: req.body.amount || receipt.ocrData?.amount?.value || 0,
+            amount: Number(amount),
+            fromAccountId,
             merchant: req.body.merchant || receipt.ocrData?.merchant?.value || 'Unknown',
             category: req.body.category || receipt.ocrData?.suggestedCategory || 'other',
             date: req.body.date || receipt.ocrData?.date?.value || new Date(),
-            notes: req.body.notes || '',
+            note: req.body.notes || '',
+            idempotencyKey
+        }, session);
+
+        Object.assign(expense, {
             receiptUrl: receipt.fileUrl,
             receiptOcrData: receipt.ocrData?.rawText || '',
-        };
+        });
+        await expense.save({ session });
 
-        const expense = await Expense.create(expenseData);
-        receipt.linkedExpenseId = expense._id;
-        await receipt.save();
+        receipt.linkedTransactionId = expense._id;
+        await receipt.save({ session });
+        
+        await writeAuditLog(req, {
+            entityType: 'receipt',
+            entityId: receipt._id,
+            action: 'link_expense',
+            before: { linkedExpenseId: null },
+            after: { linkedTransactionId: expense._id, expense: expense.toObject() },
+        });
+
+        await commitTransactionIfSupported(session);
+
+        invalidateUserDerivedCache(req.user._id);
 
         res.status(201).json({ success: true, expense, receipt });
-    } catch (err) { next(err); }
+    } catch (err) { 
+        if (session) {
+            await abortTransactionIfSupported(session);
+        }
+        next(err); 
+    }
 }

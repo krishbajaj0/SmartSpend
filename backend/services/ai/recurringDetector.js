@@ -1,4 +1,5 @@
-import Expense from '../../models/Expense.js';
+import Transaction from '../../models/Transaction.js';
+import { ACTIVE_TRANSACTION_FILTER } from '../../config/constants.js';
 
 /**
  * Detect potential recurring expenses from spending history.
@@ -10,7 +11,7 @@ export async function detectRecurringPatterns(userId) {
     const threeMonthsAgo = new Date();
     threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
 
-    const expenses = await Expense.find({
+    const expenses = await Transaction.find({ type: 'EXPENSE', isDeleted: false, 
         userId,
         isDeleted: false,
         isRecurring: false,

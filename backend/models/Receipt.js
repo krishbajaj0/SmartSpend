@@ -21,9 +21,9 @@ const receiptSchema = new mongoose.Schema({
         }],
         rawText: String,
     },
-    linkedExpenseId: {
+    linkedTransactionId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Expense',
+        ref: 'Transaction',
     },
 }, {
     timestamps: true,

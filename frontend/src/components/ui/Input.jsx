@@ -9,13 +9,14 @@ export default function Input({
     placeholder,
     error,
     icon,
+    action,
     disabled = false,
     className = '',
     id,
     ...props
 }) {
     const [focused, setFocused] = useState(false);
-    const hasValue = value && value.length > 0;
+    const hasValue = value !== undefined && value !== null && String(value).length > 0;
     const inputId = id || `input-${label?.toLowerCase().replace(/\s+/g, '-')}`;
 
     return (
@@ -30,9 +31,10 @@ export default function Input({
                 disabled={disabled}
                 onFocus={() => setFocused(true)}
                 onBlur={() => setFocused(false)}
-                className={icon ? 'has-icon' : ''}
+                className={`${icon ? 'has-icon' : ''} ${action ? 'has-action' : ''}`}
                 {...props}
             />
+            {action && <div className="input-action">{action}</div>}
             {label && (
                 <label htmlFor={inputId} className="input-label">
                     {label}
@@ -55,7 +57,7 @@ export function Textarea({
     ...props
 }) {
     const [focused, setFocused] = useState(false);
-    const hasValue = value && value.length > 0;
+    const hasValue = value !== undefined && value !== null && String(value).length > 0;
     const inputId = id || `textarea-${label?.toLowerCase().replace(/\s+/g, '-')}`;
 
     return (

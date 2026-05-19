@@ -13,7 +13,7 @@ export default function GlassCard({
         <motion.div
             className={`glass-card ${hoverable ? 'glass-card-hoverable' : ''} ${padding ? 'glass-card-padded' : ''} ${className}`}
             onClick={onClick}
-            whileHover={hoverable ? { y: -4 } : undefined}
+            whileHover={hoverable ? { y: -2 } : undefined}
             transition={{ duration: 0.2 }}
             {...props}
         >

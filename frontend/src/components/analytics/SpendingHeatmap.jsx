@@ -1,20 +1,23 @@
 import { useMemo, useState } from 'react';
-import { format, subDays, startOfWeek, eachDayOfInterval, getDay } from 'date-fns';
+import { format, subDays, eachDayOfInterval, getDay } from 'date-fns';
+import { formatCurrency } from '../../utils/currency';
 import './SpendingHeatmap.css';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-export default function SpendingHeatmap({ expenses = [], days = 180 }) {
+export default function SpendingHeatmap({ expenses = [], heatmapData = null, days = 180, currency = 'INR' }) {
     const [tooltip, setTooltip] = useState(null);
 
-    const { weeks, months, maxSpend } = useMemo(() => {
+    const { weeks, maxSpend } = useMemo(() => {
         // Build daily spend map
-        const dailySpend = {};
-        expenses.forEach(e => {
-            if (!e.date) return;
-            const key = format(new Date(e.date), 'yyyy-MM-dd');
-            dailySpend[key] = (dailySpend[key] || 0) + (e.amount || 0);
-        });
+        const dailySpend = heatmapData ? { ...heatmapData } : {};
+        if (!heatmapData) {
+            expenses.forEach(e => {
+                if (!e.date) return;
+                const key = format(new Date(e.date), 'yyyy-MM-dd');
+                dailySpend[key] = (dailySpend[key] || 0) + (e.amount || 0);
+            });
+        }
 
         const endDate = new Date();
         const startDate = subDays(endDate, days);
@@ -30,7 +33,6 @@ export default function SpendingHeatmap({ expenses = [], days = 180 }) {
         // Group into weeks
         const wks = [];
         let currentWeek = [];
-        const weekStart = startOfWeek(startDate, { weekStartsOn: 0 });
 
         // Pad start
         const padDays = getDay(startDate);
@@ -67,8 +69,8 @@ export default function SpendingHeatmap({ expenses = [], days = 180 }) {
             }
         });
 
-        return { weeks: wks, months: mos, maxSpend: mx };
-    }, [expenses, days]);
+        return { weeks: wks, maxSpend: mx };
+    }, [expenses, heatmapData, days]);
 
     function getLevel(spend) {
         if (spend === 0) return 0;
@@ -85,7 +87,7 @@ export default function SpendingHeatmap({ expenses = [], days = 180 }) {
         setTooltip({
             x: e.clientX + 10,
             y: e.clientY - 30,
-            text: `${format(cell.date, 'MMM d, yyyy')} — ₹${Math.round(cell.spend).toLocaleString('en-IN')}`,
+            text: `${format(cell.date, 'MMM d, yyyy')} — ${formatCurrency(Math.round(cell.spend), currency)}`,
         });
     }
 

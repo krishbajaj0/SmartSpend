@@ -1,46 +1,64 @@
 import Budget from '../../models/Budget.js';
-import Expense from '../../models/Expense.js';
+import Transaction from '../../models/Transaction.js';
+import Notification from '../../models/Notification.js';
 import { createNotification } from '../../controllers/notificationController.js';
 
-/**
- * Check budget alerts after a new expense is created.
- */
 export async function checkBudgetAlerts(userId, category) {
     try {
         const budget = await Budget.findOne({ userId, category, isActive: true });
-        if (!budget) return;
+        if (!budget || !budget.limitAmount || budget.limitAmount <= 0) return;
 
         const now = new Date();
-        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 
-        const [agg] = await Expense.aggregate([
-            { $match: { userId, category, isDeleted: false, date: { $gte: monthStart } } },
-            { $group: { _id: null, total: { $sum: '$amount' } } },
+        const [agg] = await Transaction.aggregate([
+        { $match: { type: 'EXPENSE', isDeleted: false,  userId, category, isDeleted: false, date: { $gte: monthStart } } },
+            { $group: { _id: null, total: { $sum: { $ifNull: ['$baseAmount', '$amount'] } } } },
         ]);
 
         const spent = agg?.total || 0;
         const pct = (spent / budget.limitAmount) * 100;
+        const monthKey = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+
+        async function createBudgetAlert(level, type, title, message, priority, metadata) {
+            const dedupeKey = `${userId}:${category}:${monthKey}:${level}`;
+            const existing = await Notification.findOne({ userId, type, 'metadata.dedupeKey': dedupeKey }).lean();
+            if (existing) return;
+            await createNotification(userId, type, title, message, priority, {
+                ...metadata,
+                category,
+                monthKey,
+                level,
+                dedupeKey,
+            });
+        }
 
         if (pct >= 100) {
-            await createNotification(
-                userId, 'budget_exceeded',
+            await createBudgetAlert(
+                'exceeded',
+                'budget_exceeded',
                 `${category} Budget Exceeded!`,
-                `You've spent ₹${Math.round(spent).toLocaleString()} — exceeding your ₹${budget.limitAmount.toLocaleString()} ${category} budget`,
-                5, { category, spent, limit: budget.limitAmount }
+                `You spent ${Math.round(spent).toLocaleString()}, exceeding your ${budget.limitAmount.toLocaleString()} ${category} budget`,
+                5,
+                { spent, limit: budget.limitAmount }
             );
         } else if (pct >= budget.criticalThreshold) {
-            await createNotification(
-                userId, 'budget_critical',
+            await createBudgetAlert(
+                'critical',
+                'budget_critical',
                 `${category} Budget Critical`,
-                `You've used ${Math.round(pct)}% of your ${category} budget — only ₹${Math.round(budget.limitAmount - spent).toLocaleString()} remaining`,
-                4, { category, percentage: pct }
+                `You used ${Math.round(pct)}% of your ${category} budget; only ${Math.round(budget.limitAmount - spent).toLocaleString()} remaining`,
+                4,
+                { percentage: pct }
             );
         } else if (pct >= budget.warningThreshold) {
-            await createNotification(
-                userId, 'budget_warning',
+            await createBudgetAlert(
+                'warning',
+                'budget_warning',
                 `${category} Budget Warning`,
-                `You've used ${Math.round(pct)}% of your ${category} budget`,
-                3, { category, percentage: pct }
+                `You used ${Math.round(pct)}% of your ${category} budget`,
+                3,
+                { percentage: pct }
             );
         }
     } catch (err) {
