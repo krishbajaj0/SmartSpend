@@ -11,6 +11,7 @@ import Account from '../models/Account.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { writeAuditLog } from '../utils/audit.js';
 import { ACTIVE_TRANSACTION_FILTER } from '../config/constants.js';
+import { normalizeCategory } from '../utils/categoryNormalization.js';
 
 const QUERY_TIMEOUT = 15_000;
 
@@ -18,9 +19,10 @@ const QUERY_TIMEOUT = 15_000;
 export async function createOrUpdateBudget(req, res, next) {
     try {
         const { category, limitAmount, warningThreshold, criticalThreshold } = req.body;
-        const before = await Budget.findOne({ userId: req.user._id, category }).lean().maxTimeMS(QUERY_TIMEOUT);
+        const normalizedCategory = normalizeCategory(category);
+        const before = await Budget.findOne({ userId: req.user._id, category: normalizedCategory }).lean().maxTimeMS(QUERY_TIMEOUT);
         const budget = await Budget.findOneAndUpdate(
-            { userId: req.user._id, category },
+            { userId: req.user._id, category: normalizedCategory },
             { limitAmount, warningThreshold, criticalThreshold, isActive: true },
             { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
         ).maxTimeMS(QUERY_TIMEOUT);
@@ -53,7 +55,7 @@ export async function getBudgets(req, res, next) {
                 },
                 {
                     $group: {
-                        _id:        '$category',
+                        _id:        { $toLower: '$category' },
                         totalSpent: { $sum: '$amount' },
                     },
                 },
@@ -107,7 +109,7 @@ export async function getBudgetStatus(req, res, next) {
                 },
                 {
                     $group: {
-                        _id:        '$category',
+                        _id:        { $toLower: '$category' },
                         totalSpent: { $sum: '$amount' },
                     },
                 },
@@ -155,8 +157,9 @@ export async function getBudgetStatus(req, res, next) {
 // DELETE /api/budgets/:category
 export async function deleteBudget(req, res, next) {
     try {
+        const normalizedCategory = normalizeCategory(req.params.category);
         const before = await Budget.findOneAndUpdate(
-            { userId: req.user._id, category: req.params.category },
+            { userId: req.user._id, category: normalizedCategory },
             { isActive: false },
             { new: false }
         ).maxTimeMS(QUERY_TIMEOUT);

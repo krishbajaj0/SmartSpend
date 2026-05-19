@@ -16,6 +16,7 @@ import SmartSearch from '../components/dashboard/SmartSearch';
 import { useAuth } from '../context/AuthContext';
 import { dashboardAPI } from '../utils/api';
 import { formatCurrency, getCurrencySymbol } from '../utils/currency';
+import { normalizeCategory } from '../utils/categoryNormalization';
 import './DashboardPage.css';
 
 const containerVariants = {
@@ -162,7 +163,7 @@ export default function DashboardPage() {
             setNetWorth(data.netWorth || 0);
             setAccountList(data.accounts || []);
             setCategoryData((data.categoryBreakdown || []).map(b => ({
-                name: b.category,
+                name: normalizeCategory(b.category),
                 value: b.amount || 0,
             })));
         } catch (err) {
@@ -184,7 +185,10 @@ export default function DashboardPage() {
     const filteredTransactions = useMemo(() => {
         let filtered = recentTransactions;
         if (aiFilters) {
-            if (aiFilters.category) filtered = filtered.filter(e => e.category === aiFilters.category);
+            if (aiFilters.category) {
+                const searchCat = normalizeCategory(aiFilters.category);
+                filtered = filtered.filter(e => normalizeCategory(e.category) === searchCat);
+            }
             if (aiFilters.merchant) {
                 const m = aiFilters.merchant.toLowerCase();
                 filtered = filtered.filter(e => 

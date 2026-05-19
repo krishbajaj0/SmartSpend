@@ -16,6 +16,7 @@ import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { budgetsAPI, goalsAPI } from '../utils/api';
 import { formatCurrency, getCurrencySymbol } from '../utils/currency';
+import { normalizeCategory } from '../utils/categoryNormalization';
 import './BudgetsPage.css';
 
 export default function BudgetsPage() {
@@ -48,6 +49,7 @@ export default function BudgetsPage() {
                 if (budRes.status === 'fulfilled') {
                     setBudgetData((budRes.value.data.budgets || []).map(b => ({
                         ...b,
+                        category: normalizeCategory(b.category),
                         spent: b.currentSpent || 0,
                         limit: b.limitAmount || 0,
                     })));
@@ -69,16 +71,17 @@ export default function BudgetsPage() {
     }, [budgetData]);
 
     async function updateBudgetLimit(category, newLimit) {
-        const budget = budgetData.find(b => b.category === category);
+        const normCat = normalizeCategory(category);
+        const budget = budgetData.find(b => b.category === normCat);
         try {
             await budgetsAPI.createOrUpdate({
-                category,
+                category: normCat,
                 limitAmount: Number(newLimit),
                 warningThreshold: budget?.warningThreshold || 75,
                 criticalThreshold: budget?.criticalThreshold || 90,
             });
             setBudgetData(prev =>
-                prev.map(b => b.category === category ? { ...b, limit: Number(newLimit), limitAmount: Number(newLimit) } : b)
+                prev.map(b => b.category === normCat ? { ...b, limit: Number(newLimit), limitAmount: Number(newLimit) } : b)
             );
         } catch {
             addToast('Failed to update budget', { type: 'error' });
@@ -163,9 +166,11 @@ export default function BudgetsPage() {
             return;
         }
         
-        const category = newBudget.category === '__custom__' 
-            ? newBudget.customCategory?.toLowerCase().replace(/\s+/g, '_') || 'other'
+        const rawCategory = newBudget.category === '__custom__' 
+            ? newBudget.customCategory || 'other'
             : newBudget.category;
+            
+        const category = normalizeCategory(rawCategory);
             
         if (!category || (newBudget.category === '__custom__' && !newBudget.customCategory)) {
             addToast('Please select or enter a category', { type: 'error' });
@@ -182,6 +187,7 @@ export default function BudgetsPage() {
             const res = await budgetsAPI.list();
             setBudgetData((res.data.budgets || []).map(b => ({
                 ...b,
+                category: normalizeCategory(b.category),
                 spent: b.currentSpent || 0,
                 limit: b.limitAmount || 0,
             })));

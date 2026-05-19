@@ -17,6 +17,7 @@ import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { analyticsAPI } from '../utils/api';
 import { formatCurrency, formatCurrencyCompact } from '../utils/currency';
+import { normalizeCategory } from '../utils/categoryNormalization';
 import './AnalyticsPage.css';
 
 const CHART_COLORS = ['#6c5ce7', '#00cec9', '#fdcb6e', '#e17055', '#00b894', '#a29bfe', '#fab1a0'];
@@ -64,11 +65,14 @@ export default function AnalyticsPage() {
 
             if (compRes.status === 'fulfilled') {
                 const comp = compRes.value.data.comparison || [];
-                setComparisonData(comp.map(c => ({
-                    name: (CATEGORIES[c.category]?.icon || '') + ' ' + (CATEGORIES[c.category]?.label || c.category),
-                    thisMonth: Math.round(c.thisMonth || 0),
-                    lastMonth: Math.round(c.lastMonth || 0),
-                })).filter(c => c.thisMonth > 0 || c.lastMonth > 0));
+                setComparisonData(comp.map(c => {
+                    const norm = normalizeCategory(c.category);
+                    return {
+                        name: (CATEGORIES[norm]?.icon || '') + ' ' + (CATEGORIES[norm]?.label || c.category),
+                        thisMonth: Math.round(c.thisMonth || 0),
+                        lastMonth: Math.round(c.lastMonth || 0),
+                    };
+                })).filter(c => c.thisMonth > 0 || c.lastMonth > 0);
             }
 
             if (topRes.status === 'fulfilled') {

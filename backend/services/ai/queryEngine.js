@@ -1,18 +1,7 @@
 import mongoose from 'mongoose';
 import Transaction from '../../models/Transaction.js';
 import { ACTIVE_TRANSACTION_FILTER } from '../../config/constants.js';
-
-// ── Category aliases ──
-export const CATEGORY_ALIASES = {
-    food: ['food', 'eat', 'dining', 'restaurant', 'lunch', 'dinner', 'breakfast', 'meal', 'snack', 'cafe', 'coffee'],
-    transport: ['transport', 'travel', 'fuel', 'petrol', 'uber', 'ola', 'cab', 'taxi', 'metro', 'bus', 'train', 'flight'],
-    shopping: ['shopping', 'shop', 'buy', 'purchase', 'amazon', 'flipkart', 'clothes', 'gadget', 'electronics'],
-    entertainment: ['entertainment', 'movie', 'netflix', 'spotify', 'game', 'fun', 'party', 'concert'],
-    bills: ['bill', 'bills', 'utility', 'electricity', 'water', 'rent', 'recharge', 'subscription', 'internet', 'phone'],
-    health: ['health', 'medical', 'hospital', 'doctor', 'medicine', 'pharmacy', 'gym', 'fitness'],
-    education: ['education', 'course', 'book', 'study', 'tuition', 'school', 'college', 'learn'],
-    groceries: ['grocery', 'groceries', 'vegetable', 'fruit', 'provisions', 'supermarket'],
-};
+import { CATEGORY_ALIASES, normalizeCategory } from '../../utils/categoryNormalization.js';
 
 // ── Date range parser ──
 export function parseDateRange(text) {
@@ -90,7 +79,7 @@ export function parseCategory(text) {
     const lower = text.toLowerCase();
     for (const [cat, aliases] of Object.entries(CATEGORY_ALIASES)) {
         for (const alias of aliases) {
-            if (lower.includes(alias)) return cat;
+            if (lower.includes(alias)) return normalizeCategory(cat);
         }
     }
     return null;
@@ -119,7 +108,9 @@ export async function processQuery(userId, query) {
         date: { $gte: dateRange.start, $lte: dateRange.end },
     };
 
-    if (category) matchStage.category = category;
+    if (category) {
+        matchStage.category = { $regex: `^${category}$`, $options: 'i' };
+    }
     
     if (merchant) {
         matchStage.$or = [
@@ -165,7 +156,7 @@ export async function processQuery(userId, query) {
     if (!category) {
         topCategories = await Transaction.aggregate([
             { $match: matchStage },
-            { $group: { _id: '$category', total: { $sum: { $ifNull: ['$baseAmount', '$amount'] } }, count: { $sum: 1 } } },
+            { $group: { _id: { $toLower: '$category' }, total: { $sum: { $ifNull: ['$baseAmount', '$amount'] } }, count: { $sum: 1 } } },
             { $sort: { total: -1 } },
             { $limit: 5 },
         ]);

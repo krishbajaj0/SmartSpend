@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import sanitizeHtml from 'sanitize-html';
+import { normalizeCategory } from '../utils/categoryNormalization.js';
 
 const transactionSchema = new mongoose.Schema({
     userId: {
@@ -95,10 +96,13 @@ const transactionSchema = new mongoose.Schema({
     optimisticConcurrency: true,
 });
 
-// Auto-set merchantNormalized
+// Auto-set merchantNormalized and normalize category
 transactionSchema.pre('save', function (next) {
     if (this.isModified('merchant')) {
         this.merchantNormalized = this.merchant.toLowerCase().trim();
+    }
+    if (this.category) {
+        this.category = normalizeCategory(this.category);
     }
     next();
 });
@@ -121,8 +125,14 @@ transactionSchema.pre('findOneAndUpdate', function (next) {
         if (update.$set.note) update.$set.note = sanitizeHtml(update.$set.note, { allowedTags: [], allowedAttributes: {} });
         if (update.$set.merchant) update.$set.merchant = sanitizeHtml(update.$set.merchant, { allowedTags: [], allowedAttributes: {} });
         if (update.$set.subCategory) update.$set.subCategory = sanitizeHtml(update.$set.subCategory, { allowedTags: [], allowedAttributes: {} });
-    } else if (update.note || update.merchant || update.subCategory) {
-        sanitizeFields(update);
+        if (update.$set.category) update.$set.category = normalizeCategory(update.$set.category);
+    } else {
+        if (update.note || update.merchant || update.subCategory) {
+            sanitizeFields(update);
+        }
+        if (update.category) {
+            update.category = normalizeCategory(update.category);
+        }
     }
     next();
 });

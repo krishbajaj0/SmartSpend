@@ -55,7 +55,7 @@ export async function getCategoryBreakdown(userId, startDate) {
         },
         {
             $group: {
-                _id:    '$category',
+                _id:    { $toLower: '$category' },
                 amount: { $sum: '$amount' },
                 count:  { $sum: 1 },
             },
@@ -76,7 +76,7 @@ export async function getTopCategory(userId, startDate) {
                 date: { $gte: startDate },
             },
         },
-        { $group: { _id: '$category', total: { $sum: '$amount' } } },
+        { $group: { _id: { $toLower: '$category' }, total: { $sum: '$amount' } } },
         { $sort: { total: -1 } },
         { $limit: 1 },
     ]).option({ maxTimeMS: QUERY_TIMEOUT });
