@@ -46,19 +46,19 @@ import { getMetrics } from './utils/metrics.js';
 import { AUTH_COOKIE } from './utils/authCookies.js';
 
 // ── Route imports ─────────────────────────────────────────────────────────────
-import authRoutes        from './routes/auth.js';
-import expenseRoutes     from './routes/expenses.js';
-import budgetRoutes      from './routes/budgets.js';
-import goalRoutes        from './routes/goals.js';
-import receiptRoutes     from './routes/receipts.js';
-import analyticsRoutes   from './routes/analytics.js';
+import authRoutes from './routes/auth.js';
+import expenseRoutes from './routes/expenses.js';
+import budgetRoutes from './routes/budgets.js';
+import goalRoutes from './routes/goals.js';
+import receiptRoutes from './routes/receipts.js';
+import analyticsRoutes from './routes/analytics.js';
 import notificationRoutes from './routes/notifications.js';
-import aiRoutes          from './routes/ai.js';
-import importRoutes      from './routes/import.js';
-import dashboardRoutes   from './routes/dashboard.js';
-import accountRoutes     from './routes/accounts.js';
+import aiRoutes from './routes/ai.js';
+import importRoutes from './routes/import.js';
+import dashboardRoutes from './routes/dashboard.js';
+import accountRoutes from './routes/accounts.js';
 import transactionRoutes from './routes/transactions.js';
-import { initSocket }    from './services/socketService.js';
+import { initSocket } from './services/socketService.js';
 
 // ── Process-level safety nets ─────────────────────────────────────────────────
 // These MUST be registered before any async work begins.
@@ -98,7 +98,7 @@ const corsOptions = {
         if (ALLOWED_ORIGINS.includes(origin) || isLocalNetwork) {
             return callback(null, true);
         }
-        
+
         // Return callback(null, false) instead of throwing an Error. 
         // Throwing an Error triggers the default Express error handler which strips 
         // CORS headers and causes a generic "No 'Access-Control-Allow-Origin' header" 
@@ -107,7 +107,7 @@ const corsOptions = {
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'X-Requested-With', 'Accept'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'X-Requested-With', 'Accept', 'X-Request-Id', 'X-CSRF-Token'],
 };
 
 // Ensure CORS middleware is registered before ANY routes
@@ -142,9 +142,9 @@ app.use(requestTimeout(REQUEST_TIMEOUT_MS));
 //   limit that stops runaway clients without triggering on normal usage.
 const generalLimiter = rateLimit({
     windowMs: constants.rateLimit.general.windowMs,
-    max:      constants.rateLimit.general.max,          // 100/min — public
+    max: constants.rateLimit.general.max,          // 100/min — public
     standardHeaders: true,
-    legacyHeaders:   false,
+    legacyHeaders: false,
     // Authenticated requests are handled by apiLimiter (300/min) — skip here
     // so they aren't double-counted against the stricter public budget.
     skip: (req) => !!req.headers.authorization || req.headers.cookie?.includes(`${AUTH_COOKIE}=`),
@@ -155,10 +155,10 @@ const generalLimiter = rateLimit({
 // Applied only to /api/* routes that sit behind the protect() middleware.
 const apiLimiter = rateLimit({
     windowMs: constants.rateLimit.general.windowMs,
-    max:      Math.max(constants.rateLimit.general.max * 3, 300), // 300/min minimum
+    max: Math.max(constants.rateLimit.general.max * 3, 300), // 300/min minimum
     keyGenerator: (req) => req.user?._id?.toString() || 'authenticated-route',
     standardHeaders: true,
-    legacyHeaders:   false,
+    legacyHeaders: false,
     message: { success: false, message: 'Too many requests. Please try again later.' },
 });
 app.use('/api', generalLimiter);
@@ -168,30 +168,30 @@ app.use('/api', generalLimiter);
 
 // 1. Analytics limiter FIRST (protect global capacity)
 app.use(
-  '/api/analytics',
-  protect,
-  controlPlane,
-  createConcurrencyLimiter(LIMITS.ANALYTICS_CONCURRENCY, 'analytics'),
-  analyticsUserLimiter(LIMITS.ANALYTICS_PER_USER),
-  apiLimiter,
-  analyticsRoutes
+    '/api/analytics',
+    protect,
+    controlPlane,
+    createConcurrencyLimiter(LIMITS.ANALYTICS_CONCURRENCY, 'analytics'),
+    analyticsUserLimiter(LIMITS.ANALYTICS_PER_USER),
+    apiLimiter,
+    analyticsRoutes
 );
 
 // 2. Global limiter AFTER
 app.use(createConcurrencyLimiter(LIMITS.GLOBAL_CONCURRENCY, 'global'));
 
 // 3. Critical CRUD and Auth routes (HIGH priority)
-app.use('/api/auth',          authRoutes);
-app.use('/api/expenses',      protect, controlPlane, apiLimiter, expenseRoutes);
-app.use('/api/budgets',       protect, controlPlane, apiLimiter, budgetRoutes);
-app.use('/api/goals',         protect, controlPlane, apiLimiter, goalRoutes);
-app.use('/api/receipts',      protect, controlPlane, apiLimiter, receiptRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/expenses', protect, controlPlane, apiLimiter, expenseRoutes);
+app.use('/api/budgets', protect, controlPlane, apiLimiter, budgetRoutes);
+app.use('/api/goals', protect, controlPlane, apiLimiter, goalRoutes);
+app.use('/api/receipts', protect, controlPlane, apiLimiter, receiptRoutes);
 app.use('/api/notifications', protect, controlPlane, apiLimiter, notificationRoutes);
-app.use('/api/ai',            protect, controlPlane, apiLimiter, aiRoutes);
-app.use('/api/import',        protect, controlPlane, apiLimiter, importRoutes);
-app.use('/api/dashboard',     protect, controlPlane, apiLimiter, dashboardRoutes);
-app.use('/api/accounts',      protect, controlPlane, apiLimiter, accountRoutes);
-app.use('/api/transactions',  protect, controlPlane, apiLimiter, transactionRoutes);
+app.use('/api/ai', protect, controlPlane, apiLimiter, aiRoutes);
+app.use('/api/import', protect, controlPlane, apiLimiter, importRoutes);
+app.use('/api/dashboard', protect, controlPlane, apiLimiter, dashboardRoutes);
+app.use('/api/accounts', protect, controlPlane, apiLimiter, accountRoutes);
+app.use('/api/transactions', protect, controlPlane, apiLimiter, transactionRoutes);
 
 // ── Health check ──────────────────────────────────────────────────────────────
 // Returns DB connection state so load balancers / uptime monitors can detect
@@ -260,7 +260,7 @@ async function gracefulShutdown(signal) {
 }
 
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM')); // Docker / Kubernetes stop
-process.on('SIGINT',  () => gracefulShutdown('SIGINT'));  // Ctrl-C / dev mode
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));  // Ctrl-C / dev mode
 
 // ── Bootstrap (DB first, then HTTP) ──────────────────────────────────────────
 (async () => {
