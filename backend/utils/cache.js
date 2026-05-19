@@ -50,10 +50,12 @@ export function invalidatePrefix(prefix) {
 }
 
 export function invalidateUserDerivedCache(userId) {
+    if (!userId) return;
     const id = String(userId);
     for (const key of cache.keys()) {
-        if (key === `dashboard_${id}` || (key.startsWith('analytics_') && key.endsWith(`_${id}`))) {
+        if (key.includes(id)) {
             cache.delete(key);
         }
     }
 }
+

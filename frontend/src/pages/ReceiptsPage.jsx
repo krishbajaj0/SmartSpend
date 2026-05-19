@@ -61,6 +61,7 @@ export default function ReceiptsPage() {
         });
         addToast(`Receipt scanned and expense saved: ${formatCurrency(expense.amount, currency)}`, { type: 'success' });
         setTab('gallery');
+        window.dispatchEvent(new Event('expenseUpdated'));
         loadReceipts();
     }
 

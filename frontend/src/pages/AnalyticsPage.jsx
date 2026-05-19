@@ -72,7 +72,7 @@ export default function AnalyticsPage() {
                         thisMonth: Math.round(c.thisMonth || 0),
                         lastMonth: Math.round(c.lastMonth || 0),
                     };
-                })).filter(c => c.thisMonth > 0 || c.lastMonth > 0);
+                }).filter(c => c.thisMonth > 0 || c.lastMonth > 0));
             }
 
             if (topRes.status === 'fulfilled') {

@@ -92,7 +92,7 @@ router.get('/', async (req, res, next) => {
                         categoryBreakdown: [
                             {
                                 $group: {
-                                    _id: '$category',
+                                    _id: { $toLower: '$category' },
                                     amount: { $sum: '$amount' },
                                     count: { $sum: 1 },
                                 },
