@@ -54,6 +54,14 @@ export function AuthProvider({ children }) {
         return u;
     }, [initSocket]);
 
+    const loadDemo = useCallback(async () => {
+        const res = await authAPI.loadDemo();
+        const { user: u } = res.data;
+        setUser(u);
+        initSocket();
+        return u;
+    }, [initSocket]);
+
     const register = useCallback(async (name, email, password) => {
         const res = await authAPI.register({ name, email, password });
         const { user: u } = res.data;
@@ -112,7 +120,7 @@ export function AuthProvider({ children }) {
 
     return (
         <AuthContext.Provider value={{ 
-            user, loading, login, loginWithGoogle, register, socket,
+            user, loading, login, loginWithGoogle, loadDemo, register, socket,
             forgotPassword, resetPassword, logout, updateProfile, 
             isAuthenticated: !!user 
         }}>

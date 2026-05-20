@@ -153,6 +153,13 @@ const constants = deepFreeze({
             subscriptions: process.env.ENABLE_AI_INTENT_SUBSCRIPTIONS !== 'false',
         }
     },
+
+    // Demo Account
+    demo: {
+        email: 'krish1@gmail.com',
+        password: 'Krish@123',
+        showcaseMode: process.env.DEMO_SHOWCASE_MODE !== 'false'
+    }
 });
 
 export default constants;

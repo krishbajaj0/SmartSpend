@@ -15,9 +15,10 @@ export default function LoginPage() {
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [demoLoading, setDemoLoading] = useState(false);
     const [success, setSuccess] = useState(false);
     const [errors, setErrors] = useState({});
-    const { login, loginWithGoogle } = useAuth();
+    const { login, loginWithGoogle, loadDemo } = useAuth();
     const { error: showError, success: showSuccess } = useToast();
     const navigate = useNavigate();
 
@@ -34,7 +35,7 @@ export default function LoginPage() {
     // ── Password Login ──
     const handlePasswordSubmit = async (e) => {
         e.preventDefault();
-        if (loading) return;
+        if (loading || demoLoading) return;
         if (!validatePassword()) return;
         setLoading(true);
         try {
@@ -57,7 +58,7 @@ export default function LoginPage() {
 
     // ── Google Login ──
     const handleGoogleSuccess = async (credentialResponse) => {
-        if (loading) return;
+        if (loading || demoLoading) return;
         setLoading(true);
         try {
             await loginWithGoogle(credentialResponse.credential);
@@ -73,6 +74,22 @@ export default function LoginPage() {
 
     const handleGoogleError = () => {
         showError('Google authentication failed. Please try again.');
+    };
+
+    // ── Demo Account Tour ──
+    const handleDemoLogin = async () => {
+        if (loading || demoLoading) return;
+        setDemoLoading(true);
+        try {
+            await loadDemo();
+            setSuccess(true);
+            showSuccess('Explore mode activated!');
+            setTimeout(() => navigate('/dashboard'), 600);
+        } catch (err) {
+            showError(err.response?.data?.message || 'Failed to load demo account. Please try again.');
+        } finally {
+            setDemoLoading(false);
+        }
     };
 
     return (
@@ -142,10 +159,24 @@ export default function LoginPage() {
                         variant="primary"
                         fullWidth
                         loading={loading}
+                        disabled={demoLoading}
                         iconRight={success ? <Check size={18} /> : <ArrowRight size={18} />}
                         className={success ? 'btn-success-state' : ''}
                     >
                         {success ? 'Success!' : 'Sign In'}
+                    </Button>
+
+                    <Button
+                        type="button"
+                        onClick={handleDemoLogin}
+                        fullWidth
+                        loading={demoLoading}
+                        disabled={loading || demoLoading}
+                        className={`btn-demo ${success ? 'btn-success-state' : ''}`}
+                        style={{ marginTop: '0.75rem' }}
+                        iconRight={success ? <Check size={18} /> : <span>⚡</span>}
+                    >
+                        {success ? 'Activated!' : 'Explore Demo Account'}
                     </Button>
                 </form>
 

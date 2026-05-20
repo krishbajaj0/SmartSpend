@@ -7,6 +7,7 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 const AUTH_BOOTSTRAP_PATHS = new Set([
     '/api/auth/register',
     '/api/auth/login',
+    '/api/auth/demo/load',
     '/api/auth/verify-otp',
     '/api/auth/forgot-password',
     '/api/auth/reset-password',

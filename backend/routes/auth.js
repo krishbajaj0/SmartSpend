@@ -17,7 +17,7 @@
 
 import express from 'express';
 import {
-    register, login, logout, getMe, updateProfile, changePassword,
+    register, login, logout, getMe, updateProfile, changePassword, loadDemoAccount,
 } from '../controllers/authController.js';
 import { googleAuth } from '../controllers/googleAuthController.js';
 import { protect } from '../middleware/auth.js';
@@ -59,6 +59,8 @@ router.post('/login', authLimiter, validate({
     email:    { required: true, type: 'email' },
     password: { required: true, type: 'string' },
 }), login);
+
+router.post('/demo/load', authLimiter, loadDemoAccount);
 
 router.post('/google', authLimiter, validate({
     credential: { required: true, type: 'string' },

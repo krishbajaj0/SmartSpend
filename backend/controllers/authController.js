@@ -11,6 +11,7 @@ import { signToken } from '../utils/token.js';
 import { invalidateUserCache } from '../middleware/auth.js';
 import { clearAuthCookies, issueAuthCookies } from '../utils/authCookies.js';
 import { disconnectUserSockets } from '../services/socketService.js';
+import { seedDemoData } from '../utils/demoSeeder.js';
 
 const DB_TIMEOUT = 10_000;
 
@@ -156,6 +157,38 @@ export async function login(req, res, next) {
             user:    publicUser(user),
         });
     } catch (err) { next(err); }
+}
+
+export async function loadDemoAccount(req, res, next) {
+    try {
+        logger.info('Handling Demo Account Loading/Reset Request...');
+        
+        // Seed demo data with forceReset = true to reset and ensure clean, non-duplicate state
+        const user = await seedDemoData(true);
+
+        // Fetch to ensure tokenVersion is populated
+        const fullUser = await User.findById(user._id).select('+passwordHash +tokenVersion').maxTimeMS(DB_TIMEOUT);
+
+        // Update lastLoginAt on successful login
+        await User.findByIdAndUpdate(
+            fullUser._id,
+            { $set: { lastLoginAt: new Date() } }
+        ).maxTimeMS(DB_TIMEOUT);
+
+        // Record successful login log
+        await logLoginActivity(req, fullUser._id, fullUser.email, 'local');
+
+        issueSession(res, fullUser);
+        
+        return res.json({
+            success: true,
+            user: publicUser(fullUser),
+            message: 'Demo account loaded and logged in successfully!'
+        });
+    } catch (err) {
+        logger.error({ err }, 'Failed to load and log in to demo account');
+        return next(err);
+    }
 }
 
 export async function logout(req, res, next) {
