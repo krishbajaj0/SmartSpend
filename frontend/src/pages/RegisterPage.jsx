@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
 import ParallaxOrbs from '../components/ParallaxOrbs';
-import OTPVerification from '../components/auth/OTPVerification';
+import GoogleSignInButton from '../components/auth/GoogleSignInButton';
 import { useToast } from '../context/ToastContext';
 import './LoginPage.css';
 
@@ -32,9 +32,8 @@ export default function RegisterPage() {
     const [confirmPassword, setConfirmPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
-    const [showOtp, setShowOtp] = useState(false);
     const [errors, setErrors] = useState({});
-    const { register, verifyOtp, resendOtp } = useAuth();
+    const { register, loginWithGoogle } = useAuth();
     const { success, error } = useToast();
     const navigate = useNavigate();
 
@@ -69,6 +68,7 @@ export default function RegisterPage() {
         }
     };
 
+    // ── Local Signup ──
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (loading) return;
@@ -76,39 +76,33 @@ export default function RegisterPage() {
         setLoading(true);
         try {
             await register(name, email, password);
-            success('Account created! Please check your inbox for the OTP verification code.');
-            setShowOtp(true);
+            success('Account created successfully! Welcome to SmartSpend.');
+            setTimeout(() => navigate('/dashboard'), 600);
         } catch (err) {
             setErrors({ email: err.response?.data?.message || 'Registration failed' });
+            error(err.response?.data?.message || 'Registration failed');
         } finally {
             setLoading(false);
         }
     };
 
-    const handleVerifyOtp = async (otpValue) => {
+    // ── Google Signup/Login ──
+    const handleGoogleSuccess = async (credentialResponse) => {
         if (loading) return;
         setLoading(true);
         try {
-            await verifyOtp(email, otpValue);
-            success('Email verified successfully!');
-            navigate('/dashboard');
+            await loginWithGoogle(credentialResponse.credential);
+            success('Signed in with Google successfully!');
+            setTimeout(() => navigate('/dashboard'), 600);
         } catch (err) {
-            error(err.response?.data?.message || 'Verification failed');
-            // Re-throw so OTPVerification component can read attemptsRemaining
-            throw err;
+            error(err.response?.data?.message || 'Google signup failed');
         } finally {
             setLoading(false);
         }
     };
 
-    const handleResendOtp = async () => {
-        if (loading) return;
-        try {
-            await resendOtp(email);
-            success('OTP resent successfully');
-        } catch (err) {
-            error(err.response?.data?.message || 'Failed to resend OTP');
-        }
+    const handleGoogleError = () => {
+        error('Google authentication failed. Please try again.');
     };
 
     return (
@@ -124,171 +118,181 @@ export default function RegisterPage() {
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.5, delay: 0.2 }}
             >
-                    <div className="auth-brand-header" style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-                        <span className="auth-brand-icon" style={{ fontSize: '2.5rem', display: 'inline-block', marginBottom: '0.5rem' }}>💰</span>
-                        <h1 className="auth-brand-title" style={{ fontSize: '2.2rem', margin: 0, fontWeight: 800 }}>
-                            <span className="text-gradient">SmartSpend</span>
-                        </h1>
-                        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '0.75rem', lineHeight: '1.5', padding: '0 1rem' }}>
-                            An expense management platform with intelligent categorization, budget alerts, receipt handling, and analytics.
-                        </p>
-                    </div>
-                    <div className="auth-form-header" style={{ textAlign: 'center' }}>
-                        <h2 style={{ fontSize: '1.6rem' }}>Create account</h2>
-                        <p className="text-muted">Start tracking your expenses</p>
-                    </div>
+                <div className="auth-brand-header" style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+                    <span className="auth-brand-icon" style={{ fontSize: '2.5rem', display: 'inline-block', marginBottom: '0.5rem' }}>💰</span>
+                    <h1 className="auth-brand-title" style={{ fontSize: '2.2rem', margin: 0, fontWeight: 800 }}>
+                        <span className="text-gradient">SmartSpend</span>
+                    </h1>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '0.75rem', lineHeight: '1.5', padding: '0 1rem' }}>
+                        An expense management platform with intelligent categorization, budget alerts, receipt handling, and analytics.
+                    </p>
+                </div>
+                <div className="auth-form-header" style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+                    <h2 style={{ fontSize: '1.6rem' }}>Create account</h2>
+                    <p className="text-muted">Start tracking your expenses</p>
+                </div>
 
-                    {/* Step indicator */}
-                    <div className="auth-steps">
-                        <div className={`auth-step ${step >= 1 ? 'active' : ''} ${step > 1 ? 'completed' : ''}`}>
-                            {step > 1 ? <Check size={14} /> : '1'}
-                        </div>
-                        <div className={`auth-step-line ${step > 1 ? 'active' : ''}`} />
-                        <div className={`auth-step ${step >= 2 ? 'active' : ''}`}>2</div>
-                    </div>
+                {/* Google Sign-in as the PRIMARY CTA */}
+                <GoogleSignInButton
+                    onSuccess={handleGoogleSuccess}
+                    onError={handleGoogleError}
+                    loading={loading}
+                    label="signup"
+                />
 
-                    <form onSubmit={handleSubmit} className="auth-form">
-                        <AnimatePresence mode="wait">
-                            {step === 1 && (
-                                <motion.div
-                                    key="step1"
-                                    className="auth-form"
-                                    initial={{ opacity: 0, x: -20 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    exit={{ opacity: 0, x: 20 }}
-                                    transition={{ duration: 0.25 }}
+                <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    margin: '24px 0 16px 0',
+                    color: 'var(--text-secondary, #94a3b8)',
+                    fontSize: '0.85rem'
+                }}>
+                    <div style={{ flex: 1, height: '1px', background: 'rgba(255, 255, 255, 0.08)' }} />
+                    <span>or sign up with email</span>
+                    <div style={{ flex: 1, height: '1px', background: 'rgba(255, 255, 255, 0.08)' }} />
+                </div>
+
+                {/* Step indicator */}
+                <div className="auth-steps" style={{ marginBottom: '1.5rem' }}>
+                    <div className={`auth-step ${step >= 1 ? 'active' : ''} ${step > 1 ? 'completed' : ''}`}>
+                        {step > 1 ? <Check size={14} /> : '1'}
+                    </div>
+                    <div className={`auth-step-line ${step > 1 ? 'active' : ''}`} />
+                    <div className={`auth-step ${step >= 2 ? 'active' : ''}`}>2</div>
+                </div>
+
+                <form onSubmit={handleSubmit} className="auth-form">
+                    <AnimatePresence mode="wait">
+                        {step === 1 && (
+                            <motion.div
+                                key="step1"
+                                className="auth-form"
+                                initial={{ opacity: 0, x: -20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                exit={{ opacity: 0, x: 20 }}
+                                transition={{ duration: 0.25 }}
+                            >
+                                <Input
+                                    label="Full Name"
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
+                                    icon={<User size={18} />}
+                                    error={errors.name}
+                                    placeholder="John Doe"
+                                />
+                                <Input
+                                    label="Email"
+                                    type="email"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    icon={<Mail size={18} />}
+                                    error={errors.email}
+                                    placeholder="you@example.com"
+                                />
+                                <Input
+                                    label="Confirm Email"
+                                    type="email"
+                                    value={confirmEmail}
+                                    onChange={(e) => setConfirmEmail(e.target.value)}
+                                    icon={<Mail size={18} />}
+                                    error={errors.confirmEmail}
+                                    placeholder="Re-enter your email"
+                                />
+                                <Button
+                                    type="button"
+                                    variant="primary"
+                                    fullWidth
+                                    iconRight={<ArrowRight size={18} />}
+                                    onClick={handleNext}
                                 >
-                                    <Input
-                                        label="Full Name"
-                                        value={name}
-                                        onChange={(e) => setName(e.target.value)}
-                                        icon={<User size={18} />}
-                                        error={errors.name}
-                                        placeholder="John Doe"
-                                    />
-                                    <Input
-                                        label="Email"
-                                        type="email"
-                                        value={email}
-                                        onChange={(e) => setEmail(e.target.value)}
-                                        icon={<Mail size={18} />}
-                                        error={errors.email}
-                                        placeholder="you@example.com"
-                                    />
-                                    <Input
-                                        label="Confirm Email"
-                                        type="email"
-                                        value={confirmEmail}
-                                        onChange={(e) => setConfirmEmail(e.target.value)}
-                                        icon={<Mail size={18} />}
-                                        error={errors.confirmEmail}
-                                        placeholder="Re-enter your email"
-                                    />
+                                    Continue
+                                </Button>
+                            </motion.div>
+                        )}
+
+                        {step === 2 && (
+                            <motion.div
+                                key="step2"
+                                className="auth-form"
+                                initial={{ opacity: 0, x: 20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                exit={{ opacity: 0, x: -20 }}
+                                transition={{ duration: 0.25 }}
+                            >
+                                <Input
+                                    label="Password"
+                                    type={showPassword ? 'text' : 'password'}
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    icon={<Lock size={18} />}
+                                    error={errors.password}
+                                    placeholder="Min 6 characters"
+                                    action={
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowPassword(!showPassword)}
+                                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', display: 'flex' }}
+                                            tabIndex="-1"
+                                            aria-label={showPassword ? "Hide password" : "Show password"}
+                                        >
+                                            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                        </button>
+                                    }
+                                />
+                                {password && (
+                                    <>
+                                        <div className="password-strength">
+                                            {[1, 2, 3].map(i => (
+                                                <div
+                                                    key={i}
+                                                    className={`password-strength-bar ${strength.score >= i ? `active-${strength.level}` : ''}`}
+                                                />
+                                            ))}
+                                        </div>
+                                        <span className={`password-strength-label text-xs`} style={{ color: strength.level === 'weak' ? 'var(--danger)' : strength.level === 'medium' ? 'var(--warning)' : 'var(--success)' }}>
+                                            {strength.label}
+                                        </span>
+                                    </>
+                                )}
+                                <Input
+                                    label="Confirm Password"
+                                    type={showPassword ? 'text' : 'password'}
+                                    value={confirmPassword}
+                                    onChange={(e) => setConfirmPassword(e.target.value)}
+                                    icon={<Lock size={18} />}
+                                    error={errors.confirmPassword}
+                                    placeholder="Re-enter password"
+                                />
+                                <div style={{ display: 'flex', gap: 'var(--space-md)' }}>
                                     <Button
                                         type="button"
+                                        variant="ghost"
+                                        icon={<ArrowLeft size={18} />}
+                                        onClick={() => { setStep(1); setErrors({}); }}
+                                    >
+                                        Back
+                                    </Button>
+                                    <Button
+                                        type="submit"
                                         variant="primary"
                                         fullWidth
+                                        loading={loading}
                                         iconRight={<ArrowRight size={18} />}
-                                        onClick={handleNext}
                                     >
-                                        Continue
+                                        Create Account
                                     </Button>
-                                </motion.div>
-                            )}
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </form>
 
-                            {step === 2 && (
-                                <motion.div
-                                    key="step2"
-                                    className="auth-form"
-                                    initial={{ opacity: 0, x: 20 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    exit={{ opacity: 0, x: -20 }}
-                                    transition={{ duration: 0.25 }}
-                                >
-                                    <Input
-                                        label="Password"
-                                        type={showPassword ? 'text' : 'password'}
-                                        value={password}
-                                        onChange={(e) => setPassword(e.target.value)}
-                                        icon={<Lock size={18} />}
-                                        error={errors.password}
-                                        placeholder="Min 6 characters"
-                                        action={
-                                            <button
-                                                type="button"
-                                                onClick={() => setShowPassword(!showPassword)}
-                                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', display: 'flex' }}
-                                                tabIndex="-1"
-                                                aria-label={showPassword ? "Hide password" : "Show password"}
-                                            >
-                                                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                                            </button>
-                                        }
-                                    />
-                                    {password && (
-                                        <>
-                                            <div className="password-strength">
-                                                {[1, 2, 3].map(i => (
-                                                    <div
-                                                        key={i}
-                                                        className={`password-strength-bar ${strength.score >= i ? `active-${strength.level}` : ''}`}
-                                                    />
-                                                ))}
-                                            </div>
-                                            <span className={`password-strength-label text-xs`} style={{ color: strength.level === 'weak' ? 'var(--danger)' : strength.level === 'medium' ? 'var(--warning)' : 'var(--success)' }}>
-                                                {strength.label}
-                                            </span>
-                                        </>
-                                    )}
-                                    <Input
-                                        label="Confirm Password"
-                                        type={showPassword ? 'text' : 'password'}
-                                        value={confirmPassword}
-                                        onChange={(e) => setConfirmPassword(e.target.value)}
-                                        icon={<Lock size={18} />}
-                                        error={errors.confirmPassword}
-                                        placeholder="Re-enter password"
-                                    />
-                                    <div style={{ display: 'flex', gap: 'var(--space-md)' }}>
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            icon={<ArrowLeft size={18} />}
-                                            onClick={() => { setStep(1); setErrors({}); }}
-                                        >
-                                            Back
-                                        </Button>
-                                        <Button
-                                            type="submit"
-                                            variant="primary"
-                                            fullWidth
-                                            loading={loading}
-                                            iconRight={<ArrowRight size={18} />}
-                                        >
-                                            Create Account
-                                        </Button>
-                                    </div>
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
-                    </form>
-
-                    <p className="auth-switch">
-                        Already have an account?{' '}
-                        <Link to="/login" className="auth-switch-link">Sign in</Link>
-                    </p>
+                <p className="auth-switch">
+                    Already have an account?{' '}
+                    <Link to="/login" className="auth-switch-link">Sign in</Link>
+                </p>
             </motion.div>
-
-            {showOtp && (
-                <OTPVerification
-                    email={email}
-                    purpose="register"
-                    onVerify={handleVerifyOtp}
-                    onResend={handleResendOtp}
-                    onCancel={() => setShowOtp(false)}
-                    isLoading={loading}
-                />
-            )}
         </div>
     );
 }

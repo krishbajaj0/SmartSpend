@@ -81,16 +81,13 @@ api.interceptors.response.use(
 export const authAPI = {
     register: (data) => api.post('/auth/register', data),
     login: (data) => api.post('/auth/login', data),
+    loginWithGoogle: (data) => api.post('/auth/google', data),
     logout: () => api.post('/auth/logout'),
     getMe: () => api.get('/auth/me'),
     updateProfile: (data) => api.put('/auth/profile', data),
     changePassword: (data) => api.put('/auth/change-password', data),
     forgotPassword: (email) => api.post('/auth/forgot-password', { email }),
     resetPassword: (data) => api.post('/auth/reset-password', data),
-    verifyOtp: (data) => api.post('/auth/verify-otp', data),
-    resendOtp: (email) => api.post('/auth/resend-otp', { email }),
-    requestLoginOtp: (email) => api.post('/auth/login-otp', { email }),
-    verifyLoginOtp: (data) => api.post('/auth/verify-login-otp', data),
 };
 
 // ── Expenses ──

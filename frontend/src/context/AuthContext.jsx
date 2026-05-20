@@ -46,34 +46,16 @@ export function AuthProvider({ children }) {
         return u;
     }, [initSocket]);
 
-    const register = useCallback(async (name, email, password) => {
-        const res = await authAPI.register({ name, email, password });
-        // Do NOT set user state here — the user is unverified.
-        // Auth state (setUser + socket) is established only in verifyOtp()
-        // after OTP confirmation and cookie issuance.
-        return res.data;
-    }, []);
-
-    const verifyOtp = useCallback(async (email, otp) => {
-        const res = await authAPI.verifyOtp({ email, otp });
+    const loginWithGoogle = useCallback(async (credential) => {
+        const res = await authAPI.loginWithGoogle({ credential });
         const { user: u } = res.data;
         setUser(u);
         initSocket();
         return u;
     }, [initSocket]);
 
-    const resendOtp = useCallback(async (email) => {
-        const res = await authAPI.resendOtp(email);
-        return res.data;
-    }, []);
-
-    const requestLoginOtp = useCallback(async (email) => {
-        const res = await authAPI.requestLoginOtp(email);
-        return res.data;
-    }, []);
-
-    const loginWithOtp = useCallback(async (email, otp) => {
-        const res = await authAPI.verifyLoginOtp({ email, otp });
+    const register = useCallback(async (name, email, password) => {
+        const res = await authAPI.register({ name, email, password });
         const { user: u } = res.data;
         setUser(u);
         initSocket();
@@ -130,8 +112,7 @@ export function AuthProvider({ children }) {
 
     return (
         <AuthContext.Provider value={{ 
-            user, loading, login, register, verifyOtp, resendOtp, 
-            requestLoginOtp, loginWithOtp, socket,
+            user, loading, login, loginWithGoogle, register, socket,
             forgotPassword, resetPassword, logout, updateProfile, 
             isAuthenticated: !!user 
         }}>

@@ -9,8 +9,8 @@
  *    Must be explicitly selected with `.select('+tokenVersion')` when needed.
  *  - `toJSON` transform strips all sensitive fields. Defence-in-depth: even if
  *    a controller accidentally calls res.json(user), no secrets leak.
- *  - Partial index on { email, otpExpire } keeps OTP lookups fast without
- *    indexing documents that have no active OTP.
+ *  - Google OAuth users receive a random `passwordHash` so the schema stays
+ *    consistent; they authenticate only via Google credential verification.
  *  - `comparePassword` is an instance method because it operates on a single
  *    document's hash.
  */
@@ -38,11 +38,23 @@ const userSchema = new mongoose.Schema(
         },
         passwordHash: {
             type: String,
-            required: [true, 'Password is required'],
+            required: false,      // Optional — Google OAuth users get a random hash
             minlength: 6,
-            select: false,          // Never returned by default — must opt in with .select('+passwordHash')
+            select: false,        // Never returned by default — must opt in with .select('+passwordHash')
         },
         avatar: { type: String, default: '' },
+
+        // Auth provider: 'local' = email/password, 'google' = Google OAuth
+        provider: {
+            type: String,
+            enum: ['local', 'google'],
+            default: 'local',
+        },
+        // Google OAuth subject identifier (sub claim from ID token)
+        googleId: {
+            type: String,
+            sparse: true,         // Sparse index: allows multiple null values
+        },
         currency: {
             type: String,
             default: 'INR',
@@ -71,6 +83,7 @@ const userSchema = new mongoose.Schema(
         resetPasswordExpire: Date,
 
         isVerified:  { type: Boolean, default: false },
+        emailVerifiedAt: Date,
         lastLoginAt: Date,
 
         // JWT revocation counter.
@@ -99,21 +112,7 @@ const userSchema = new mongoose.Schema(
 
 // ── Indexes ───────────────────────────────────────────────────────────────────
 // email unique index is created by `unique: true` above.
-
-// Compound partial index for OTP verification (atomicVerifyOtp query pattern):
-//   filter: { email, otp: hashedValue, otpExpire: { $gt: now }, otpAttempts: { $lt: 5 } }
-//
-// WHY COMPOUND: the query filters on all four fields simultaneously.
-// A compound index on (email, otp, otpExpire, otpAttempts) lets MongoDB resolve
-// the entire filter from the index without touching the document — a covered query.
-//
-// WHY PARTIAL: only documents that have an active OTP (otpExpire set) are indexed.
-// The majority of users never have an active OTP. Without partialFilterExpression
-// the index would bloat to the full collection size for a query that affects <1% of docs.
-userSchema.index(
-    { email: 1, otp: 1, otpExpire: 1, otpAttempts: 1 },
-    { partialFilterExpression: { otpExpire: { $exists: true } } }
-);
+// googleId sparse index is created by `sparse: true` above.
 
 // ── Hooks ─────────────────────────────────────────────────────────────────────
 // Hash the password before every save where passwordHash was modified.

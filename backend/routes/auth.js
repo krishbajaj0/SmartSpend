@@ -18,9 +18,9 @@
 import express from 'express';
 import {
     register, login, logout, getMe, updateProfile, changePassword,
-    forgotPassword, resetPassword, verifyOtp, resendOtp,
-    requestLoginOtp, verifyLoginOtp,
+    forgotPassword, resetPassword,
 } from '../controllers/authController.js';
+import { googleAuth } from '../controllers/googleAuthController.js';
 import { protect } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import rateLimit from 'express-rate-limit';
@@ -61,16 +61,9 @@ router.post('/login', authLimiter, validate({
     password: { required: true, type: 'string' },
 }), login);
 
-// OTP verification: strict limiter — this is the brute-force surface
-router.post('/verify-otp', otpLimiter, validate({
-    email: { required: true, type: 'email' },
-    otp:   { required: true, type: 'string', minLength: 6, maxLength: 6 },
-}), verifyOtp);
-
-// Resend has a strict limiter to prevent email spam abuse
-router.post('/resend-otp', otpLimiter, validate({
-    email: { required: true, type: 'email' },
-}), resendOtp);
+router.post('/google', authLimiter, validate({
+    credential: { required: true, type: 'string' },
+}), googleAuth);
 
 // Forgot-password: authLimiter (user enumeration risk if too strict here)
 router.post('/forgot-password', authLimiter, validate({
@@ -83,17 +76,6 @@ router.post('/reset-password', otpLimiter, validate({
     otp:         { required: true, type: 'string', minLength: 6, maxLength: 6 },
     newPassword: { required: true, type: 'string', minLength: 6 },
 }), resetPassword);
-
-// Login-via-OTP request: authLimiter (triggers email send, rate limited at SMTP layer too)
-router.post('/login-otp', authLimiter, validate({
-    email: { required: true, type: 'email' },
-}), requestLoginOtp);
-
-// Login-via-OTP verification: strict limiter
-router.post('/verify-login-otp', otpLimiter, validate({
-    email: { required: true, type: 'email' },
-    otp:   { required: true, type: 'string', minLength: 6, maxLength: 6 },
-}), verifyLoginOtp);
 
 // ── Protected routes ──────────────────────────────────────────────────────────
 

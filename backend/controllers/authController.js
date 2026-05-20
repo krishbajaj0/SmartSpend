@@ -12,7 +12,7 @@ import { AppError } from '../middleware/errorHandler.js';
 import logger from '../config/logger.js';
 import { hashOtp } from '../utils/otp.js';
 import { signToken } from '../utils/token.js';
-import { sendOtpEmail, sendLoginOtpEmail } from '../services/emailService.js';
+import { sendOtpEmail } from '../services/emailService.js';
 import { invalidateUserCache } from '../middleware/auth.js';
 import { clearAuthCookies, issueAuthCookies } from '../utils/authCookies.js';
 import { disconnectUserSockets } from '../services/socketService.js';
@@ -171,59 +171,34 @@ async function atomicVerifyOtp(email, purpose, submittedOtp, req, extraSelect = 
 export async function register(req, res, next) {
     try {
         const { name, email, password } = req.body;
+        const normalizedEmail = email.toLowerCase().trim();
 
-        const exists = await User.findOne({ email }).maxTimeMS(DB_TIMEOUT);
+        const exists = await User.findOne({ email: normalizedEmail }).maxTimeMS(DB_TIMEOUT);
         if (exists) {
             return res.status(409).json({ success: false, message: 'Email already registered' });
         }
 
-        const plainOtp = generateOtp();
-        const now = new Date();
-        const expiresAt = new Date(now.getTime() + 5 * 60 * 1000); // 5 minutes expiry
-
-        const user = await User.create({
+        let user = await User.create({
             name,
-            email,
+            email: normalizedEmail,
             passwordHash: password,
-            isVerified:   false,
+            isVerified:   true,
+            emailVerifiedAt: new Date(),
         });
 
-        // Invalidate any stale registration OTP documents
-        await OtpVerification.deleteMany({ email, purpose: 'register' }).maxTimeMS(DB_TIMEOUT);
+        // Refetch to include tokenVersion for signing stability
+        user = await User.findById(user._id).select('+tokenVersion').maxTimeMS(DB_TIMEOUT);
 
-        // Save ephemeral OTP details in dedicated collection conforming exactly to required schema
-        await OtpVerification.create({
-            userId: user._id,
-            email,
-            purpose: 'register',
-            otpHash: hashOtp(plainOtp),
-            attempts: 0,
-            maxAttempts: 5,
-            lastSentAt: now,
-            expiresAt,
-            verified: false,
-            ip: req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown',
-            userAgent: req.headers['user-agent'] || ''
-        });
+        // Update lastLoginAt
+        await User.findByIdAndUpdate(
+            user._id,
+            { $set: { lastLoginAt: new Date() } }
+        ).maxTimeMS(DB_TIMEOUT);
 
-        // Log request creation security audit
-        await logOtpAttempt(req, email, 'request_register_otp', true);
-
-        // Send verification email instantly in background (non-blocking)
-        let otpSent = true;
-        sendOtpEmail(user.email, plainOtp).catch((emailErr) => {
-            console.error(`⚠️ [Auth Controller] Initial OTP email failed for ${user.email}:`, emailErr.message);
-            otpSent = false;
-        });
-
-        // NOTE: Do NOT return user or issue auth cookies here.
-        // The user is unverified. Auth state is only established after verifyOtp().
+        issueSession(res, user);
         return res.status(201).json({
-            success:              true,
-            requiresVerification: true,
-            otpSent:              otpSent,
-            email:                user.email,
-            message:              'Registration successful. Please verify your email with the 6-digit code we sent.',
+            success: true,
+            user:    publicUser(user),
         });
     } catch (err) {
         if (res.headersSent) return;
@@ -276,84 +251,7 @@ export async function logout(req, res, next) {
     } catch (err) { next(err); }
 }
 
-export async function requestLoginOtp(req, res, next) {
-    try {
-        const { email } = req.body;
 
-        const user = await User.findOne({ email }).maxTimeMS(DB_TIMEOUT);
-        if (!user) throw new AppError('No account found with that email', 404);
-
-        if (!user.isVerified) {
-            throw new AppError('Please verify your email first', 403);
-        }
-
-        const now = new Date();
-
-        // 1. Check if login verification flow is currently locked out
-        const existingOtp = await OtpVerification.findOne({ email, purpose: 'login' }).maxTimeMS(DB_TIMEOUT);
-        
-        if (existingOtp && existingOtp.lockUntil && existingOtp.lockUntil > now) {
-            const minutesLeft = Math.ceil((existingOtp.lockUntil - now) / 60000);
-            await logOtpAttempt(req, email, 'request_login_otp', false, 'locked_out');
-            throw new AppError(`Verification is locked due to too many failed attempts. Please try again in ${minutesLeft} minute(s).`, 429);
-        }
-
-        // 2. Enforce 60-second resend cooldown based on lastSentAt
-        if (existingOtp && existingOtp.lastSentAt && (now - existingOtp.lastSentAt) < 60000) {
-            const secondsLeft = Math.ceil((60000 - (now - existingOtp.lastSentAt)) / 1000);
-            await logOtpAttempt(req, email, 'request_login_otp', false, 'cooldown_active');
-            const err = new AppError(`Please wait ${secondsLeft} second(s) before requesting another OTP.`, 429);
-            err.secondsLeft = secondsLeft;
-            throw err;
-        }
-
-        const plainOtp = generateOtp();
-        const expiresAt = new Date(now.getTime() + 5 * 60 * 1000); // 5 minutes expiry
-
-        // Invalidate old login OTP records
-        await OtpVerification.deleteMany({ email, purpose: 'login' }).maxTimeMS(DB_TIMEOUT);
-
-        // Store new login verification code
-        await OtpVerification.create({
-            userId: user._id,
-            email,
-            purpose: 'login',
-            otpHash: hashOtp(plainOtp),
-            attempts: 0,
-            maxAttempts: 5,
-            lastSentAt: now,
-            expiresAt,
-            verified: false,
-            ip: req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown',
-            userAgent: req.headers['user-agent'] || ''
-        });
-
-        await logOtpAttempt(req, email, 'request_login_otp', true);
-
-        await sendLoginOtpEmail(email, plainOtp);
-
-        res.json({ success: true, message: 'Login OTP sent to your email' });
-    } catch (err) { next(err); }
-}
-
-export async function verifyLoginOtp(req, res, next) {
-    try {
-        const { email, otp } = req.body;
-
-        const user = await atomicVerifyOtp(email, 'login', otp, req, '+tokenVersion');
-
-        await User.findByIdAndUpdate(
-            user._id,
-            { $set: { lastLoginAt: new Date() } }
-        ).maxTimeMS(DB_TIMEOUT);
-
-        issueSession(res, user);
-        res.json({
-            success: true,
-            user:    publicUser(user),
-        });
-    } catch (err) { next(err); }
-}
 
 export async function getMe(req, res) {
     res.json({ success: true, user: req.user });
@@ -490,86 +388,4 @@ export async function resetPassword(req, res, next) {
     } catch (err) { next(err); }
 }
 
-export async function verifyOtp(req, res, next) {
-    try {
-        const { email, otp } = req.body;
 
-        const user = await atomicVerifyOtp(email, 'register', otp, req, '+tokenVersion');
-
-        await User.findByIdAndUpdate(
-            user._id,
-            { $set: { isVerified: true } }
-        ).maxTimeMS(DB_TIMEOUT);
-
-        const verifiedUser = await User.findById(user._id)
-            .select('+tokenVersion')
-            .maxTimeMS(DB_TIMEOUT);
-
-        issueSession(res, verifiedUser);
-        res.json({
-            success: true,
-            message: 'Email verified successfully',
-            user: {
-                id:       verifiedUser._id,
-                name:     verifiedUser.name,
-                email:    verifiedUser.email,
-                currency: verifiedUser.currency,
-            },
-        });
-    } catch (err) { next(err); }
-}
-
-export async function resendOtp(req, res, next) {
-    try {
-        const { email } = req.body;
-        const user = await User.findOne({ email }).maxTimeMS(DB_TIMEOUT);
-        if (!user) throw new AppError('User not found', 404);
-
-        const now = new Date();
-
-        // Check if registration OTP flow is currently locked out
-        const existingOtp = await OtpVerification.findOne({ email, purpose: 'register' }).maxTimeMS(DB_TIMEOUT);
-
-        if (existingOtp && existingOtp.lockUntil && existingOtp.lockUntil > now) {
-            const minutesLeft = Math.ceil((existingOtp.lockUntil - now) / 60000);
-            await logOtpAttempt(req, email, 'resend_otp', false, 'locked_out');
-            throw new AppError(`Verification is locked due to too many failed attempts. Please try again in ${minutesLeft} minute(s).`, 429);
-        }
-
-        // Enforce 60-second resend cooldown
-        if (existingOtp && existingOtp.lastSentAt && (now - existingOtp.lastSentAt) < 60000) {
-            const secondsLeft = Math.ceil((60000 - (now - existingOtp.lastSentAt)) / 1000);
-            await logOtpAttempt(req, email, 'resend_otp', false, 'cooldown_active');
-            const err = new AppError(`Please wait ${secondsLeft} second(s) before requesting another OTP.`, 429);
-            err.secondsLeft = secondsLeft;
-            throw err;
-        }
-
-        const plainOtp = generateOtp();
-        const expiresAt = new Date(now.getTime() + 5 * 60 * 1000); // 5 minutes expiry
-
-        // Invalidate old registration OTP records
-        await OtpVerification.deleteMany({ email, purpose: 'register' }).maxTimeMS(DB_TIMEOUT);
-
-        // Store new registration code conforming exactly to required schema
-        await OtpVerification.create({
-            userId: user._id,
-            email,
-            purpose: 'register',
-            otpHash: hashOtp(plainOtp),
-            attempts: 0,
-            maxAttempts: 5,
-            lastSentAt: now,
-            expiresAt,
-            verified: false,
-            ip: req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown',
-            userAgent: req.headers['user-agent'] || ''
-        });
-
-        await logOtpAttempt(req, email, 'resend_otp', true);
-
-        await sendOtpEmail(email, plainOtp);
-
-        res.json({ success: true, message: 'OTP resent to your email' });
-    } catch (err) { next(err); }
-}
