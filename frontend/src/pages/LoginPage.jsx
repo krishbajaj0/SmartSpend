@@ -136,11 +136,7 @@ export default function LoginPage() {
                             }
                         />
                     </div>
-                    <div className="auth-form-options" style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
-                        <Link to="/forgot-password" className="auth-forgot-link" style={{ fontSize: '0.85rem' }}>
-                            Forgot password?
-                        </Link>
-                    </div>
+
                     <Button
                         type="submit"
                         variant="primary"

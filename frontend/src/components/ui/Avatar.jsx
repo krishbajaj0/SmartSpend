@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import './Avatar.css';
 
 const gradients = [
@@ -25,14 +26,29 @@ function getGradient(name) {
     return gradients[hash % gradients.length];
 }
 
+function sanitizeUrl(url) {
+    if (!url) return '';
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+        return url;
+    }
+    return '';
+}
+
 export default function Avatar({ name, src, size = 40, online, className = '' }) {
+    const [imgFailed, setImgFailed] = useState(false);
     const initials = getInitials(name);
     const gradient = getGradient(name);
+    const sanitizedSrc = sanitizeUrl(src);
 
     return (
         <div className={`avatar ${className}`} style={{ width: size, height: size }}>
-            {src ? (
-                <img src={src} alt={name} className="avatar-img" />
+            {sanitizedSrc && !imgFailed ? (
+                <img
+                    src={sanitizedSrc}
+                    alt={name}
+                    className="avatar-img"
+                    onError={() => setImgFailed(true)}
+                />
             ) : (
                 <div
                     className="avatar-initials"

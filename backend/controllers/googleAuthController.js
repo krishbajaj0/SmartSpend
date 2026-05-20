@@ -5,6 +5,7 @@
 
 import { OAuth2Client } from 'google-auth-library';
 import User from '../models/User.js';
+import LoginActivityLog from '../models/LoginActivityLog.js';
 import { signToken } from '../utils/token.js';
 import { issueAuthCookies } from '../utils/authCookies.js';
 import { AppError } from '../middleware/errorHandler.js';
@@ -14,15 +15,76 @@ import crypto from 'crypto';
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const DB_TIMEOUT = 10_000;
 
+/** Parse client user agent details securely. */
+function getDeviceDetails(userAgent) {
+    let device = 'Desktop';
+    if (/mobile/i.test(userAgent)) device = 'Mobile';
+    else if (/tablet/i.test(userAgent)) device = 'Tablet';
+
+    let browser = 'Unknown';
+    if (/chrome|crios/i.test(userAgent)) browser = 'Chrome';
+    else if (/firefox|fxios/i.test(userAgent)) browser = 'Firefox';
+    else if (/safari/i.test(userAgent) && !/chrome|crios/i.test(userAgent)) browser = 'Safari';
+    else if (/opr/i.test(userAgent)) browser = 'Opera';
+    else if (/edg/i.test(userAgent)) browser = 'Edge';
+
+    let os = 'Unknown';
+    if (/windows/i.test(userAgent)) os = 'Windows';
+    else if (/macintosh|mac os x/i.test(userAgent)) os = 'macOS';
+    else if (/android/i.test(userAgent)) os = 'Android';
+    else if (/iphone|ipad|ipod/i.test(userAgent)) os = 'iOS';
+    else if (/linux/i.test(userAgent)) os = 'Linux';
+
+    return { device, browser, os };
+}
+
+/** Record secure login audit logs. */
+async function logLoginActivity(req, userId, email, provider) {
+    const ip = req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown';
+    const userAgent = req.headers['user-agent'] || '';
+    const { device, browser, os } = getDeviceDetails(userAgent);
+
+    try {
+        await LoginActivityLog.create({
+            userId,
+            email,
+            ip,
+            provider,
+            userAgent,
+            device,
+            browser,
+            os
+        });
+    } catch (err) {
+        logger.error({ err }, 'Failed to record login activity log');
+    }
+}
+
+/** Validate and sanitize Google avatar URL. */
+function sanitizeAvatarUrl(url) {
+    if (!url) return '';
+    try {
+        const parsed = new URL(url);
+        if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+            return url;
+        }
+    } catch {
+        // Fallback to empty string for safety
+    }
+    return '';
+}
+
 /** Build the standard public user shape returned in auth responses. */
 function publicUser(user) {
     return {
-        id:       user._id,
-        name:     user.name,
-        email:    user.email,
-        currency: user.currency,
-        avatar:   user.avatar,
-        provider: user.provider,
+        id:             user._id,
+        name:           user.name,
+        email:          user.email,
+        currency:       user.currency,
+        avatar:         user.avatar,
+        avatarProvider: user.avatarProvider,
+        provider:       user.provider,
+        providers:      user.providers,
     };
 }
 
@@ -59,7 +121,7 @@ export async function googleAuth(req, res, next) {
         const normalizedEmail = payload.email.toLowerCase().trim();
         const googleId = payload.sub;
         const name = payload.name;
-        const picture = payload.picture;
+        const picture = sanitizeAvatarUrl(payload.picture);
 
         // Find existing user by normalized email
         let user = await User.findOne({ email: normalizedEmail }).select('+tokenVersion').maxTimeMS(DB_TIMEOUT);
@@ -73,6 +135,11 @@ export async function googleAuth(req, res, next) {
             }
             if (!user.avatar && picture) {
                 user.avatar = picture;
+                user.avatarProvider = 'google';
+                updated = true;
+            }
+            if (!user.avatarProvider) {
+                user.avatarProvider = user.avatar ? 'google' : 'local';
                 updated = true;
             }
             if (!user.isVerified) {
@@ -81,6 +148,14 @@ export async function googleAuth(req, res, next) {
             }
             if (!user.emailVerifiedAt) {
                 user.emailVerifiedAt = new Date();
+                updated = true;
+            }
+            // Safely merge providers list (avoiding replacement)
+            if (!user.providers) {
+                user.providers = ['local', 'google'];
+                updated = true;
+            } else if (!user.providers.includes('google')) {
+                user.providers.push('google');
                 updated = true;
             }
             if (updated) {
@@ -95,7 +170,9 @@ export async function googleAuth(req, res, next) {
                 email: normalizedEmail,
                 googleId,
                 avatar: picture || '',
+                avatarProvider: picture ? 'google' : 'local',
                 provider: 'google',
+                providers: ['google'],
                 isVerified: true,
                 emailVerifiedAt: new Date(),
                 passwordHash: randomPassword
@@ -104,11 +181,14 @@ export async function googleAuth(req, res, next) {
             user = await User.findById(user._id).select('+tokenVersion').maxTimeMS(DB_TIMEOUT);
         }
 
-        // Update lastLoginAt
+        // Update lastLoginAt on every successful auth
         await User.findByIdAndUpdate(
             user._id,
             { $set: { lastLoginAt: new Date() } }
         ).maxTimeMS(DB_TIMEOUT);
+
+        // Track Login Activity log
+        await logLoginActivity(req, user._id, user.email, 'google');
 
         // Issue secure auth cookies
         const token = signToken(user);

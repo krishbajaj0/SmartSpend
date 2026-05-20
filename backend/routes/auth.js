@@ -18,7 +18,6 @@
 import express from 'express';
 import {
     register, login, logout, getMe, updateProfile, changePassword,
-    forgotPassword, resetPassword,
 } from '../controllers/authController.js';
 import { googleAuth } from '../controllers/googleAuthController.js';
 import { protect } from '../middleware/auth.js';
@@ -65,17 +64,9 @@ router.post('/google', authLimiter, validate({
     credential: { required: true, type: 'string' },
 }), googleAuth);
 
-// Forgot-password: authLimiter (user enumeration risk if too strict here)
-router.post('/forgot-password', authLimiter, validate({
-    email: { required: true, type: 'email' },
-}), forgotPassword);
-
-// Reset-password OTP submission: strict limiter
-router.post('/reset-password', otpLimiter, validate({
-    email:       { required: true, type: 'email' },
-    otp:         { required: true, type: 'string', minLength: 6, maxLength: 6 },
-    newPassword: { required: true, type: 'string', minLength: 6 },
-}), resetPassword);
+// Forgot-password and Reset-password routes have been temporarily disabled.
+// router.post('/forgot-password', authLimiter, ...);
+// router.post('/reset-password', otpLimiter, ...);
 
 // ── Protected routes ──────────────────────────────────────────────────────────
 

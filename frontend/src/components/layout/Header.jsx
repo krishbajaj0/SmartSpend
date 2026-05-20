@@ -99,7 +99,7 @@ export default function Header() {
                     {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
                 </motion.button>
 
-                <Avatar name={user?.name} size={36} online />
+                <Avatar name={user?.name} src={user?.avatar} size={36} online />
             </div>
         </header>
     );

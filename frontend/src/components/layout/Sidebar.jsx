@@ -104,7 +104,7 @@ export default function Sidebar() {
 
             <div className="sidebar-footer">
                 <div className="sidebar-user">
-                    <Avatar name={user?.name} size={32} />
+                    <Avatar name={user?.name} src={user?.avatar} size={32} />
                     <AnimatePresence mode="wait">
                         {!collapsed && (
                             <motion.div

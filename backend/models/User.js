@@ -43,12 +43,22 @@ const userSchema = new mongoose.Schema(
             select: false,        // Never returned by default — must opt in with .select('+passwordHash')
         },
         avatar: { type: String, default: '' },
+        avatarProvider: {
+            type: String,
+            enum: ['local', 'google'],
+            default: 'local',
+        },
 
         // Auth provider: 'local' = email/password, 'google' = Google OAuth
         provider: {
             type: String,
             enum: ['local', 'google'],
             default: 'local',
+        },
+        providers: {
+            type: [String],
+            enum: ['local', 'google'],
+            default: ['local'],
         },
         // Google OAuth subject identifier (sub claim from ID token)
         googleId: {
