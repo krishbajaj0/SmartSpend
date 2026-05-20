@@ -325,25 +325,45 @@ export async function getHeatmap(req, res, next) {
         const yearAgo = new Date();
         yearAgo.setFullYear(yearAgo.getFullYear() - 1);
 
+        // Use IST (UTC+5:30) so date keys match the user's local calendar day.
+        // Without a timezone, $dateToString uses UTC midnight boundaries — for
+        // IST users (UTC+5:30) a transaction at e.g. 10 PM IST is stored as
+        // 16:30 UTC the same day, which is correct. But a transaction at 1 AM
+        // IST (19:30 UTC the previous day) would be bucketed into yesterday's
+        // UTC date. The timezone param shifts the grouping to IST boundaries.
+        const HEATMAP_TIMEOUT = 8_000; // 1 year scan needs more headroom
         const data = await Transaction.aggregate([
-            { $match: { userId: new mongoose.Types.ObjectId(req.user._id), type: 'EXPENSE', ...ACTIVE_TRANSACTION_FILTER, date: { $gte: yearAgo } } },
+            {
+                $match: {
+                    userId: new mongoose.Types.ObjectId(req.user._id),
+                    type: 'EXPENSE',
+                    ...ACTIVE_TRANSACTION_FILTER,
+                    date: { $gte: yearAgo },
+                },
+            },
             {
                 $group: {
-                    _id:   { $dateToString: { format: '%Y-%m-%d', date: '$date' } },
+                    _id: {
+                        $dateToString: {
+                            format: '%Y-%m-%d',
+                            date: '$date',
+                            timezone: 'Asia/Kolkata',   // IST = UTC+5:30
+                        },
+                    },
                     total: { $sum: '$amount' },
                 },
             },
-        ]).option({ maxTimeMS: QUERY_TIMEOUT });
+        ]).option({ maxTimeMS: HEATMAP_TIMEOUT });
 
         const heatmap = {};
         data.forEach(d => { heatmap[d._id] = Math.round(d.total); });
-        
+
         const responseData = { success: true, heatmap };
         setCache(cacheKey, responseData);
         res.json(responseData);
     } catch (err) {
         if (isQueryTimeout(err)) {
-            logger.warn({ route: req.originalUrl, userId: req.user._id }, 'Aggregation timeout');
+            logger.warn({ route: req.originalUrl, userId: req.user._id }, 'Heatmap aggregation timeout');
             if (cached) return res.status(200).json({ ...cached.data, degraded: true });
             return res.status(200).json({ success: true, degraded: true, heatmap: {} });
         }

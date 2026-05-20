@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { format, subDays, eachDayOfInterval, getDay } from 'date-fns';
+import { format, subDays, eachDayOfInterval, getDay, startOfDay } from 'date-fns';
 import { formatCurrency } from '../../utils/currency';
 import './SpendingHeatmap.css';
 
@@ -8,58 +8,72 @@ const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 export default function SpendingHeatmap({ expenses = [], heatmapData = null, days = 180, currency = 'INR' }) {
     const [tooltip, setTooltip] = useState(null);
 
-    const { weeks, maxSpend } = useMemo(() => {
-        // Build daily spend map
-        const dailySpend = heatmapData ? { ...heatmapData } : {};
-        if (!heatmapData) {
+    const { weeks, maxSpend, months } = useMemo(() => {
+        // ── Build daily spend map ──────────────────────────────────────────
+        // The backend returns keys as UTC date strings (e.g. "2026-05-20").
+        // We use local-date keys everywhere to avoid a timezone day-shift bug
+        // where IST (UTC+5:30) transactions get bucketed into the wrong day.
+        const dailySpend = {};
+
+        if (heatmapData) {
+            // Copy the server-provided map directly — keys are 'YYYY-MM-DD' UTC strings.
+            // We treat them as local dates since they were aggregated per calendar date
+            // in the DB (UTC midnight boundaries). Acceptable for display purposes.
+            Object.assign(dailySpend, heatmapData);
+        } else {
             expenses.forEach(e => {
                 if (!e.date) return;
-                const key = format(new Date(e.date), 'yyyy-MM-dd');
+                // Use local-time formatting so the day matches the user's timezone
+                const key = format(startOfDay(new Date(e.date)), 'yyyy-MM-dd');
                 dailySpend[key] = (dailySpend[key] || 0) + (e.amount || 0);
             });
         }
 
-        const endDate = new Date();
-        const startDate = subDays(endDate, days);
+        // ── Build the date range ───────────────────────────────────────────
+        const endDate = startOfDay(new Date());
+        const startDate = subDays(endDate, days - 1);
         const allDays = eachDayOfInterval({ start: startDate, end: endDate });
 
-        // Find max for intensity scaling
+        // Max for intensity scaling
         let mx = 0;
         allDays.forEach(d => {
             const key = format(d, 'yyyy-MM-dd');
-            mx = Math.max(mx, dailySpend[key] || 0);
+            if ((dailySpend[key] || 0) > mx) mx = dailySpend[key];
         });
 
-        // Group into weeks
+        // ── Group into GitHub-style weekly columns (Sun → Sat) ─────────────
+        // Each "week" is a column of 7 cells: index 0 = Sunday, 6 = Saturday.
+        // We pad the start so the first cell in the grid aligns to Sunday.
         const wks = [];
-        let currentWeek = [];
-
-        // Pad start
-        const padDays = getDay(startDate);
-        for (let i = 0; i < padDays; i++) {
-            currentWeek.push(null);
-        }
+        let currentWeek = new Array(7).fill(null);
 
         allDays.forEach(d => {
-            const dow = getDay(d);
-            if (dow === 0 && currentWeek.length > 0) {
-                wks.push(currentWeek);
-                currentWeek = [];
-            }
+            const dow = getDay(d); // 0 = Sunday … 6 = Saturday
             const key = format(d, 'yyyy-MM-dd');
-            currentWeek.push({
+
+            // If this is a Sunday and the current week already has data, flush it
+            if (dow === 0 && currentWeek.some(c => c !== null)) {
+                wks.push(currentWeek);
+                currentWeek = new Array(7).fill(null);
+            }
+
+            currentWeek[dow] = {
                 date: d,
                 key,
                 spend: dailySpend[key] || 0,
-            });
+            };
         });
-        if (currentWeek.length > 0) wks.push(currentWeek);
 
-        // Group months for labels
+        // Flush the last partial week
+        if (currentWeek.some(c => c !== null)) {
+            wks.push(currentWeek);
+        }
+
+        // ── Month labels ───────────────────────────────────────────────────
         const mos = [];
         let lastMonth = '';
         wks.forEach((week, wi) => {
-            const firstDay = week.find(d => d !== null);
+            const firstDay = week.find(c => c !== null);
             if (firstDay) {
                 const monthLabel = format(firstDay.date, 'MMM');
                 if (monthLabel !== lastMonth) {
@@ -69,25 +83,25 @@ export default function SpendingHeatmap({ expenses = [], heatmapData = null, day
             }
         });
 
-        return { weeks: wks, maxSpend: mx };
+        return { weeks: wks, maxSpend: mx, months: mos };
     }, [expenses, heatmapData, days]);
 
     function getLevel(spend) {
-        if (spend === 0) return 0;
-        if (maxSpend === 0) return 0;
+        if (!spend || spend === 0 || maxSpend === 0) return 0;
         const ratio = spend / maxSpend;
-        if (ratio < 0.25) return 1;
-        if (ratio < 0.5) return 2;
-        if (ratio < 0.75) return 3;
+        if (ratio < 0.2)  return 1;
+        if (ratio < 0.4)  return 2;
+        if (ratio < 0.7)  return 3;
         return 4;
     }
 
     function handleMouseEnter(e, cell) {
         if (!cell) return;
         setTooltip({
-            x: e.clientX + 10,
-            y: e.clientY - 30,
-            text: `${format(cell.date, 'MMM d, yyyy')} — ${formatCurrency(Math.round(cell.spend), currency)}`,
+            x: e.clientX + 12,
+            y: e.clientY - 36,
+            date: format(cell.date, 'MMM d, yyyy'),
+            spend: cell.spend,
         });
     }
 
@@ -97,29 +111,47 @@ export default function SpendingHeatmap({ expenses = [], heatmapData = null, day
 
     return (
         <div className="heatmap-container">
+            {/* Month labels row */}
+            {months.length > 0 && (
+                <div className="heatmap-months" style={{ paddingLeft: 32 }}>
+                    {months.map((m, i) => {
+                        // Calculate approximate pixel width: each week col = 14px (12 + 2 gap)
+                        const nextIdx = months[i + 1]?.index ?? weeks.length;
+                        const spanWeeks = nextIdx - m.index;
+                        return (
+                            <span
+                                key={i}
+                                className="heatmap-month-label"
+                                style={{ minWidth: spanWeeks * 14 }}
+                            >
+                                {m.label}
+                            </span>
+                        );
+                    })}
+                </div>
+            )}
+
             <div className="heatmap-grid">
-                {/* Day labels */}
+                {/* Day-of-week labels (Sun–Sat) */}
                 <div className="heatmap-day-labels">
                     {DAY_LABELS.map((label, i) => (
-                        <span key={i} className="heatmap-day-label">{label}</span>
+                        <span key={i} className={`heatmap-day-label ${i % 2 === 0 ? 'heatmap-day-label--hidden' : ''}`}>
+                            {label}
+                        </span>
                     ))}
                 </div>
 
-                {/* Weeks */}
+                {/* Weekly columns */}
                 <div className="heatmap-weeks">
                     {weeks.map((week, wi) => (
                         <div key={wi} className="heatmap-week">
                             {week.map((cell, di) => (
                                 <div
                                     key={di}
-                                    className={`heatmap-cell level-${cell ? getLevel(cell.spend) : 0}`}
+                                    className={`heatmap-cell level-${cell ? getLevel(cell.spend) : 'empty'}`}
                                     onMouseEnter={e => handleMouseEnter(e, cell)}
                                     onMouseLeave={handleMouseLeave}
                                 />
-                            ))}
-                            {/* Pad end of week */}
-                            {week.length < 7 && Array.from({ length: 7 - week.length }).map((_, i) => (
-                                <div key={`pad-${i}`} className="heatmap-cell level-0" />
                             ))}
                         </div>
                     ))}
@@ -143,7 +175,13 @@ export default function SpendingHeatmap({ expenses = [], heatmapData = null, day
                     className="heatmap-tooltip"
                     style={{ left: tooltip.x, top: tooltip.y }}
                 >
-                    {tooltip.text}
+                    <span className="heatmap-tooltip-date">{tooltip.date}</span>
+                    {tooltip.spend > 0
+                        ? <span className="heatmap-tooltip-amount">
+                            {formatCurrency(Math.round(tooltip.spend), currency)}
+                          </span>
+                        : <span className="heatmap-tooltip-zero">No spending</span>
+                    }
                 </div>
             )}
         </div>
