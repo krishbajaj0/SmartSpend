@@ -60,6 +60,7 @@ import dashboardRoutes from './routes/dashboard.js';
 import accountRoutes from './routes/accounts.js';
 import transactionRoutes from './routes/transactions.js';
 import { initSocket } from './services/socketService.js';
+import { initOCRWorker, terminateOCRWorker } from './services/ocr/receiptParser.js';
 
 // ── Process-level safety nets ─────────────────────────────────────────────────
 // These MUST be registered before any async work begins.
@@ -247,7 +248,14 @@ async function gracefulShutdown(signal) {
     server.close(async () => {
         logger.info('HTTP server closed. No new connections accepted.');
 
-        // 2. Close DB connection after HTTP is fully drained (no in-flight queries).
+        // 2. Terminate the Tesseract OCR worker
+        try {
+            await terminateOCRWorker();
+        } catch (err) {
+            logger.error({ err }, 'Failed to terminate Tesseract OCR worker during graceful shutdown');
+        }
+
+        // 3. Close DB connection after HTTP is fully drained (no in-flight queries).
         await disconnectDB();
 
         logger.info('Shutdown complete. Exiting.');
@@ -270,6 +278,14 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));  // Ctrl-C / dev mode
     // Connect to MongoDB. connectDB() exits the process on failure, so if we
     // reach the next line we are guaranteed to have a live DB connection.
     await connectDB();
+
+    // Initialize Tesseract OCR worker singleton
+    try {
+        await initOCRWorker();
+    } catch (err) {
+        logger.fatal({ err }, '⚠️ [Bootstrap] Failed to initialize offline Tesseract OCR worker. Failing fast.');
+        process.exit(1);
+    }
 
     // Warm up the email transporter connection pool
     try {

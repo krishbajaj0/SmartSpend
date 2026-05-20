@@ -48,10 +48,10 @@ export function requestTimeout(ms = 30_000) {
                 });
             }
 
-            // Destroy the socket — removes from keep-alive pool, reclaims fd.
-            if (req.socket && !req.socket.destroyed) {
-                req.socket.destroy();
-            }
+            // Destroy the socket — commented out to let controller cleanups finish gracefully.
+            // if (req.socket && !req.socket.destroyed) {
+            //     req.socket.destroy();
+            // }
         }, ms);
 
         // ── Client disconnect detection ───────────────────────────────────────

@@ -3,12 +3,65 @@
  * Uses Tesseract.js for text extraction, then regex for field extraction.
  */
 
+import fs from 'fs';
+import path from 'path';
+import logger from '../../config/logger.js';
+
 let Tesseract;
 try {
     Tesseract = await import('tesseract.js');
 } catch {
     // Tesseract may not be installed yet; use mock
     Tesseract = null;
+}
+
+let worker = null;
+let ocrQueue = Promise.resolve();
+
+/**
+ * Initialize Tesseract OCR worker in offline, uncompressed read-only mode using local traineddata files.
+ * Fails fast if traineddata file is missing.
+ */
+export async function initOCRWorker() {
+    if (!Tesseract) {
+        logger.warn('Tesseract.js is not installed or failed to import. Running in mock OCR mode.');
+        return;
+    }
+
+    const traineddataPath = path.join(process.cwd(), 'eng.traineddata');
+    if (!fs.existsSync(traineddataPath)) {
+        throw new Error(`CRITICAL: eng.traineddata is missing at ${traineddataPath}. Offline OCR cannot start.`);
+    }
+
+    logger.info('Initializing offline Tesseract OCR worker...');
+    worker = await Tesseract.createWorker('eng', 1, {
+        cachePath: process.cwd(),
+        langPath: process.cwd(),
+        cacheMethod: 'readOnly',
+        gzip: false,
+    });
+    logger.info('Tesseract OCR worker initialized successfully!');
+}
+
+/**
+ * Get the global Tesseract OCR worker singleton.
+ */
+export function getOCRWorker() {
+    if (!worker && Tesseract) {
+        throw new Error('Tesseract OCR worker is not initialized.');
+    }
+    return worker;
+}
+
+/**
+ * Gracefully terminate the global Tesseract OCR worker singleton during shutdown.
+ */
+export async function terminateOCRWorker() {
+    if (worker) {
+        logger.info('Terminating Tesseract OCR worker...');
+        await worker.terminate();
+        worker = null;
+    }
 }
 
 // ── Pre-processing: fix common OCR misreads ──
@@ -173,14 +226,39 @@ export async function parseReceipt(filePath) {
     let rawText = '';
 
     if (Tesseract) {
+        // Enforce single-concurrency memory protection for OCR processing (Render optimization)
+        const currentTask = ocrQueue.then(async () => {
+            let ocrTimeoutToken;
+            const timeoutPromise = new Promise((_, reject) => {
+                ocrTimeoutToken = setTimeout(() => {
+                    reject(new Error('OCR processing timed out after 10000ms'));
+                }, 10000);
+            });
+
+            const recognizePromise = (async () => {
+                const activeWorker = getOCRWorker();
+                if (!activeWorker) {
+                    throw new Error('Offline OCR worker is not available.');
+                }
+                const result = await activeWorker.recognize(filePath);
+                return result.data.text;
+            })();
+
+            try {
+                return await Promise.race([recognizePromise, timeoutPromise]);
+            } finally {
+                clearTimeout(ocrTimeoutToken);
+            }
+        });
+
+        // Advance queue even on error so subsequent requests don't block
+        ocrQueue = currentTask.catch(() => {});
+
         try {
-            const worker = await Tesseract.createWorker('eng');
-            const result = await worker.recognize(filePath);
-            rawText = result.data.text;
-            await worker.terminate();
+            rawText = await currentTask;
         } catch (err) {
-            console.error('Tesseract error:', err.message);
-            rawText = 'OCR processing failed — please enter data manually';
+            logger.error({ err, filePath }, 'OCR parsing failed or timed out');
+            rawText = 'OCR processing failed or timed out — please enter data manually';
         }
     } else {
         rawText = `Starbeans Coffee\n11 May 2026\nCappuccino  250\nMuffin  150\nTotal: 400`;

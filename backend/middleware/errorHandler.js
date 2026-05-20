@@ -15,7 +15,12 @@ export class AppError extends Error {
 /**
  * Centralized error-handling middleware.
  */
-export function errorHandler(err, req, res, _next) {
+export function errorHandler(err, req, res, next) {
+    if (res.headersSent) {
+        logger.error({ err, url: req.originalUrl, method: req.method }, 'Error occurred after response headers were already sent');
+        return next(err);
+    }
+
     let { statusCode = 500, message } = err;
 
     // Mongoose validation error

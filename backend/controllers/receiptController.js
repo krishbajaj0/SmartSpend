@@ -12,6 +12,7 @@ import { invalidateUserDerivedCache } from '../utils/cache.js';
 import { writeAuditLog } from '../utils/audit.js';
 import { createExpenseTransaction, getOrCreateMigratedBalanceAccount } from '../services/transactionService.js';
 import logger from '../config/logger.js';
+import { safeJson } from '../utils/response.js';
 
 // Multer config
 const storage = multer.diskStorage({
@@ -54,22 +55,31 @@ export async function scanReceipt(req, res, next) {
         // Check if receipt already exists for this user with same hash
         const existingReceipt = await Receipt.findOne({ userId: req.user._id, fileHash });
         if (existingReceipt) {
-            // Cleanup the newly uploaded duplicate file on disk
+            // Cleanup the duplicate file on disk
             try {
-                fs.unlinkSync(filePath);
+                if (fs.existsSync(filePath)) {
+                    fs.unlinkSync(filePath);
+                }
             } catch (err) {
                 logger.error({ err, filePath }, 'Failed to delete duplicate uploaded file');
             }
+            // Nullify filePath so finally block does not attempt to clean it up again
+            filePath = null;
 
-            // Return the existing receipt
             const baseUrl = `${req.protocol}://${req.get('host')}`;
             const receiptObj = existingReceipt.toObject();
             receiptObj.fileUrl = `${baseUrl}${existingReceipt.fileUrl}`;
-            return res.status(200).json({ success: true, receipt: receiptObj, duplicate: true });
+            return safeJson(res, 200, { success: true, receipt: receiptObj, duplicate: true });
         }
 
         // Run OCR parsing
         const ocrResult = await parseReceipt(filePath);
+
+        // Check if timeout occurred or client aborted while OCR was running
+        if (req.timedOut?.() || req.isAborted?.() || res.headersSent) {
+            logger.warn({ filePath }, 'Scan completed but request already timed out, aborted, or headers sent.');
+            return;
+        }
 
         const receipt = await Receipt.create({
             userId: req.user._id,
@@ -91,9 +101,17 @@ export async function scanReceipt(req, res, next) {
         const receiptObj = receipt.toObject();
         receiptObj.fileUrl = `${baseUrl}${receipt.fileUrl}`;
 
-        res.status(201).json({ success: true, receipt: receiptObj });
+        // Nullify filePath to keep the file for successful uploads
+        filePath = null;
+
+        return safeJson(res, 201, { success: true, receipt: receiptObj });
     } catch (err) {
-        // Cleanup file on error to prevent leaking temp files
+        if (res.headersSent) {
+            logger.error({ err, filePath }, 'Error caught in scanReceipt after headers were already sent.');
+            return;
+        }
+        return next(err);
+    } finally {
         if (filePath) {
             try {
                 if (fs.existsSync(filePath)) {
@@ -103,7 +121,6 @@ export async function scanReceipt(req, res, next) {
                 logger.error({ err: cleanupErr, filePath }, 'Failed to clean up file after scan error');
             }
         }
-        next(err);
     }
 }
 
@@ -119,8 +136,14 @@ export async function getReceipts(req, res, next) {
             }
             return obj;
         });
-        res.json({ success: true, receipts: normalizedReceipts });
-    } catch (err) { next(err); }
+        return safeJson(res, 200, { success: true, receipts: normalizedReceipts });
+    } catch (err) {
+        if (res.headersSent) {
+            logger.error({ err }, 'Error caught in getReceipts after headers were already sent.');
+            return;
+        }
+        return next(err);
+    }
 }
 
 // GET /api/receipts/:id
@@ -134,8 +157,14 @@ export async function getReceipt(req, res, next) {
         if (obj.fileUrl && !obj.fileUrl.startsWith('http')) {
             obj.fileUrl = `${baseUrl}${obj.fileUrl}`;
         }
-        res.json({ success: true, receipt: obj });
-    } catch (err) { next(err); }
+        return safeJson(res, 200, { success: true, receipt: obj });
+    } catch (err) {
+        if (res.headersSent) {
+            logger.error({ err }, 'Error caught in getReceipt after headers were already sent.');
+            return;
+        }
+        return next(err);
+    }
 }
 
 // GET /api/receipts/:id/file
@@ -152,9 +181,28 @@ export async function getReceiptFile(req, res, next) {
             throw new AppError('Invalid receipt path', 400);
         }
 
+        if (res.headersSent) {
+            logger.warn('getReceiptFile called but headers are already sent.');
+            return;
+        }
+
         res.setHeader('Cache-Control', 'private, no-store');
-        res.sendFile(filePath);
-    } catch (err) { next(err); }
+        return res.sendFile(filePath, (err) => {
+            if (err) {
+                if (res.headersSent) {
+                    logger.error({ err }, 'Error sending file after headers were sent');
+                    return;
+                }
+                return next(err);
+            }
+        });
+    } catch (err) {
+        if (res.headersSent) {
+            logger.error({ err }, 'Error caught in getReceiptFile after headers were already sent.');
+            return;
+        }
+        return next(err);
+    }
 }
 
 // POST /api/receipts/:id/link-expense — Create expense from receipt
@@ -207,11 +255,20 @@ export async function linkExpense(req, res, next) {
 
         invalidateUserDerivedCache(req.user._id);
 
-        res.status(201).json({ success: true, expense, receipt });
+        return safeJson(res, 201, { success: true, expense, receipt });
     } catch (err) { 
         if (session) {
-            await abortTransactionIfSupported(session);
+            try {
+                await abortTransactionIfSupported(session);
+            } catch (abortErr) {
+                logger.error({ err: abortErr }, 'Failed to abort transaction in linkExpense catch block');
+            }
         }
-        next(err); 
+        if (res.headersSent) {
+            logger.error({ err }, 'Error caught in linkExpense after headers were already sent.');
+            return;
+        }
+        return next(err); 
     }
 }
+
