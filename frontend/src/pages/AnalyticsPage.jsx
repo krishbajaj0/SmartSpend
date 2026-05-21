@@ -63,6 +63,8 @@ export default function AnalyticsPage() {
                 addToast('System is busy. Showing partial data.', { type: 'error' });
             }
 
+            console.log('Analytics API Results:', { compRes, topRes, catTimeRes, heatmapRes });
+
             if (compRes.status === 'fulfilled') {
                 const comp = compRes.value.data.comparison || [];
                 setComparisonData(comp.map(c => {
@@ -84,13 +86,16 @@ export default function AnalyticsPage() {
             }
 
             if (heatmapRes.status === 'fulfilled') {
-                setHeatmapData(heatmapRes.value.data.heatmap || {});
+                const heatmap = heatmapRes.value.data.heatmap || {};
+                console.log('Setting heatmapData state to:', heatmap);
+                setHeatmapData(heatmap);
             }
         } catch (err) {
             console.error("Analytics load failed:", err);
         }
         setLoading(false);
     }, [addToast]);
+
 
     // Only run after auth has fully resolved (avoids race with session cookie)
     useEffect(() => {

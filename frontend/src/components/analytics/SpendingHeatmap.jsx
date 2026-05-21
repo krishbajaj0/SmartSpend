@@ -15,6 +15,8 @@ export default function SpendingHeatmap({ expenses = [], heatmapData = null, day
         // where IST (UTC+5:30) transactions get bucketed into the wrong day.
         const dailySpend = {};
 
+        console.log('SpendingHeatmap debug: received heatmapData =', heatmapData);
+
         if (heatmapData) {
             // Copy the server-provided map directly — keys are 'YYYY-MM-DD' UTC strings.
             // We treat them as local dates since they were aggregated per calendar date
@@ -28,6 +30,10 @@ export default function SpendingHeatmap({ expenses = [], heatmapData = null, day
                 dailySpend[key] = (dailySpend[key] || 0) + (e.amount || 0);
             });
         }
+
+        console.log('SpendingHeatmap debug: dailySpend keys count =', Object.keys(dailySpend).length);
+        console.log('SpendingHeatmap debug: sample keys =', Object.keys(dailySpend).slice(0, 10));
+
 
         // ── Build the date range ───────────────────────────────────────────
         const endDate = startOfDay(new Date());
