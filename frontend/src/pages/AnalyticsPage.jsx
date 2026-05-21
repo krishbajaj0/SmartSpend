@@ -64,6 +64,14 @@ export default function AnalyticsPage() {
             }
 
             console.log('Analytics API Results:', { compRes, topRes, catTimeRes, heatmapRes });
+            console.log('heatmapRes status:', heatmapRes.status);
+            if (heatmapRes.status === 'fulfilled') {
+                console.log('heatmapRes value:', heatmapRes.value);
+                console.log('heatmapRes value.data:', heatmapRes.value?.data);
+            } else {
+                console.log('heatmapRes reason:', heatmapRes.reason);
+            }
+
 
             if (compRes.status === 'fulfilled') {
                 const comp = compRes.value.data.comparison || [];
