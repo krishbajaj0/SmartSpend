@@ -63,7 +63,7 @@ export async function getBudgets(req, res, next) {
             Account.find({ userId: req.user._id, ...ACTIVE_TRANSACTION_FILTER }).select('balance').lean().maxTimeMS(QUERY_TIMEOUT),
         ]);
 
-        const netWorth = (accounts || []).reduce((sum, acc) => sum + acc.balance, 0);
+        const netWorth = Math.round((accounts || []).reduce((sum, acc) => sum + acc.balance, 0));
 
         const spendMap = {};
         let totalSpentAll = 0;
@@ -117,7 +117,7 @@ export async function getBudgetStatus(req, res, next) {
             Account.find({ userId: req.user._id, ...ACTIVE_TRANSACTION_FILTER }).select('balance').lean().maxTimeMS(QUERY_TIMEOUT),
         ]);
 
-        const netWorth = (accounts || []).reduce((sum, acc) => sum + acc.balance, 0);
+        const netWorth = Math.round((accounts || []).reduce((sum, acc) => sum + acc.balance, 0));
 
         const spendMap = {};
         let totalSpentAll = 0;

@@ -26,8 +26,8 @@ export function formatCurrency(amount, currencyCode = 'INR', opts = {}) {
         return new Intl.NumberFormat(info.locale, {
             style: 'currency',
             currency: code,
-            minimumFractionDigits: code === 'JPY' ? 0 : 0,
-            maximumFractionDigits: code === 'JPY' ? 0 : 2,
+            minimumFractionDigits: 0,
+            maximumFractionDigits: (code === 'JPY' || code === 'INR') ? 0 : 2,
             ...opts,
         }).format(amount || 0);
     } catch {
