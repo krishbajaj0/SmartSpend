@@ -8,7 +8,7 @@ const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 export default function SpendingHeatmap({ expenses = [], heatmapData = null, days = 180, currency = 'INR' }) {
     const [tooltip, setTooltip] = useState(null);
 
-    const { weeks, maxSpend, months } = useMemo(() => {
+    const { weeks, maxSpend, months, thresholds } = useMemo(() => {
         // ── Build daily spend map ──────────────────────────────────────────
         // The backend returns keys as UTC date strings (e.g. "2026-05-20").
         // We use local-date keys everywhere to avoid a timezone day-shift bug
@@ -34,7 +34,7 @@ export default function SpendingHeatmap({ expenses = [], heatmapData = null, day
         const startDate = subDays(endDate, days - 1);
         const allDays = eachDayOfInterval({ start: startDate, end: endDate });
 
-        // Max for intensity scaling
+        // Max for intensity scaling (fallback/display)
         let mx = 0;
         allDays.forEach(d => {
             const key = format(d, 'yyyy-MM-dd');
@@ -83,15 +83,31 @@ export default function SpendingHeatmap({ expenses = [], heatmapData = null, day
             }
         });
 
-        return { weeks: wks, maxSpend: mx, months: mos };
+        // ── Percentile threshold calculation ───────────────────────────────
+        // Sorting non-zero spends to split into even quartiles
+        const nonZeroSpends = Object.keys(dailySpend)
+            .map(key => dailySpend[key])
+            .filter(spend => spend > 0)
+            .sort((a, b) => a - b);
+
+        let t1 = 0;
+        let t2 = 0;
+        let t3 = 0;
+
+        if (nonZeroSpends.length > 0) {
+            t1 = nonZeroSpends[Math.floor(nonZeroSpends.length * 0.25)] || 0;
+            t2 = nonZeroSpends[Math.floor(nonZeroSpends.length * 0.50)] || 0;
+            t3 = nonZeroSpends[Math.floor(nonZeroSpends.length * 0.75)] || 0;
+        }
+
+        return { weeks: wks, maxSpend: mx, months: mos, thresholds: { t1, t2, t3 } };
     }, [expenses, heatmapData, days]);
 
     function getLevel(spend) {
-        if (!spend || spend === 0 || maxSpend === 0) return 0;
-        const ratio = spend / maxSpend;
-        if (ratio < 0.2)  return 1;
-        if (ratio < 0.4)  return 2;
-        if (ratio < 0.7)  return 3;
+        if (!spend || spend === 0) return 0;
+        if (spend <= thresholds.t1) return 1;
+        if (spend <= thresholds.t2) return 2;
+        if (spend <= thresholds.t3) return 3;
         return 4;
     }
 
@@ -115,14 +131,14 @@ export default function SpendingHeatmap({ expenses = [], heatmapData = null, day
             {months.length > 0 && (
                 <div className="heatmap-months" style={{ paddingLeft: 32 }}>
                     {months.map((m, i) => {
-                        // Calculate approximate pixel width: each week col = 14px (12 + 2 gap)
+                        // Calculate approximate pixel width: each week col = 17px (14 + 3 gap)
                         const nextIdx = months[i + 1]?.index ?? weeks.length;
                         const spanWeeks = nextIdx - m.index;
                         return (
                             <span
                                 key={i}
                                 className="heatmap-month-label"
-                                style={{ minWidth: spanWeeks * 14 }}
+                                style={{ minWidth: spanWeeks * 17 }}
                             >
                                 {m.label}
                             </span>

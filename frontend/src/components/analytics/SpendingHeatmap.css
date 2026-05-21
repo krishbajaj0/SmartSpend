@@ -24,7 +24,7 @@
 /* ── Main grid (day labels + week columns) ── */
 .heatmap-grid {
   display: flex;
-  gap: 4px;
+  gap: 6px;
   align-items: flex-start;
 }
 
@@ -32,7 +32,7 @@
 .heatmap-day-labels {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
   padding-right: 4px;
   padding-top: 0;
   flex-shrink: 0;
@@ -41,8 +41,8 @@
 .heatmap-day-label {
   font-size: 0.6rem;
   color: var(--text-tertiary);
-  height: 12px;
-  line-height: 12px;
+  height: 14px;
+  line-height: 14px;
   width: 24px;
   text-align: right;
   /* Show only Mon, Wed, Fri to reduce clutter */
@@ -55,63 +55,68 @@
 /* ── Week columns ── */
 .heatmap-weeks {
   display: flex;
-  gap: 2px;
+  gap: 3px;
   flex-shrink: 0;
 }
 
 .heatmap-week {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
 }
 
 /* ── Individual day cells ── */
 .heatmap-cell {
-  width: 12px;
-  height: 12px;
-  border-radius: 2px;
-  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
   position: relative;
 }
 
 .heatmap-cell:hover {
-  transform: scale(1.6);
-  z-index: 1;
+  transform: scale(1.4);
+  z-index: 2;
 }
 
 /* Intensity levels — empty vs. zero-spend vs. data */
 .heatmap-cell.level-empty {
-  background: var(--bg-input, rgba(255,255,255,0.05));
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.01);
   cursor: default;
 }
 
 .heatmap-cell.level-0 {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.01);
 }
 
 .heatmap-cell.level-1 {
-  background: rgba(124, 58, 237, 0.22);
-  box-shadow: 0 0 0 1px rgba(124, 58, 237, 0.1);
+  background: rgba(139, 92, 246, 0.2); /* Soft violet fill */
+  border: 1px solid rgba(139, 92, 246, 0.1);
 }
 
 .heatmap-cell.level-2 {
-  background: rgba(124, 58, 237, 0.45);
-  box-shadow: 0 0 4px rgba(124, 58, 237, 0.2);
+  background: rgba(139, 92, 246, 0.45); /* Medium violet fill */
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  box-shadow: 0 0 4px rgba(139, 92, 246, 0.15);
 }
 
 .heatmap-cell.level-3 {
-  background: rgba(124, 58, 237, 0.7);
-  box-shadow: 0 0 6px rgba(124, 58, 237, 0.3);
+  background: rgba(139, 92, 246, 0.75); /* Rich violet fill */
+  border: 1px solid rgba(139, 92, 246, 0.4);
+  box-shadow: 0 0 8px rgba(139, 92, 246, 0.3);
 }
 
 .heatmap-cell.level-4 {
-  background: #7c3aed;
-  box-shadow: 0 0 8px rgba(124, 58, 237, 0.5);
+  background: #8b5cf6; /* Vibrant violet solid */
+  border: 1px solid rgba(139, 92, 246, 0.7);
+  box-shadow: 0 0 12px rgba(139, 92, 246, 0.5), inset 0 0 4px rgba(255, 255, 255, 0.3);
 }
 
 .heatmap-cell.level-4:hover {
-  box-shadow: 0 0 12px rgba(124, 58, 237, 0.7);
+  box-shadow: 0 0 16px rgba(139, 92, 246, 0.7);
 }
 
 /* ── Legend ── */
