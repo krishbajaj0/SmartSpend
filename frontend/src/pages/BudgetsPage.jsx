@@ -21,7 +21,7 @@ import './BudgetsPage.css';
 
 export default function BudgetsPage() {
     const location = useLocation();
-    const { user } = useAuth();
+    const { user, loading: authLoading } = useAuth();
     const currency = user?.currency || 'INR';
     const tab = location.pathname === '/goals' ? 'goals' : 'budgets';
     const [budgetData, setBudgetData] = useState([]);
@@ -59,8 +59,8 @@ export default function BudgetsPage() {
             } catch { /* silent */ }
             setLoading(false);
         }
-        load();
-    }, []);
+        if (!authLoading) load();
+    }, [authLoading]);
 
     async function updateBudgetLimit(category, newLimit) {
         const normCat = normalizeCategory(category);

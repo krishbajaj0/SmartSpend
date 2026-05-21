@@ -92,7 +92,7 @@ function LoadingSkeleton() {
 /* ── Main Component ──────────────────────────────────────── */
 
 export default function DashboardPage() {
-    const { user } = useAuth();
+    const { user, loading: authLoading } = useAuth();
     const currency = user?.currency || 'INR';
     const navigate = useNavigate();
     const [recentTransactions, setRecentTransactions] = useState([]);
@@ -143,7 +143,9 @@ export default function DashboardPage() {
         setLoading(false);
     }, []);
 
-    useEffect(() => { loadDashboard(); }, [loadDashboard]);
+    useEffect(() => {
+        if (!authLoading) loadDashboard();
+    }, [authLoading, loadDashboard]);
 
     useEffect(() => {
         const handler = () => loadDashboard();
@@ -206,7 +208,7 @@ export default function DashboardPage() {
 
     /* ── Render ────────────────────────────────────────────── */
 
-    if (loading) return <LoadingSkeleton />;
+    if (authLoading || loading) return <LoadingSkeleton />;
 
     return (
         <motion.div className="dashboard-premium" variants={containerVariants} initial="hidden" animate="visible">

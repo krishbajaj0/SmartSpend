@@ -38,7 +38,7 @@ function ChartTooltip({ active, payload, label }) {
 
 export default function AnalyticsPage() {
     const { addToast } = useToast();
-    const { user } = useAuth();
+    const { user, loading: authLoading } = useAuth();
     const currency = user?.currency || 'INR';
     const navigate = useNavigate();
     
@@ -92,9 +92,12 @@ export default function AnalyticsPage() {
         setLoading(false);
     }, [addToast]);
 
+    // Only run after auth has fully resolved (avoids race with session cookie)
     useEffect(() => {
-        loadAnalytics();
-    }, [loadAnalytics]);
+        if (!authLoading) {
+            loadAnalytics();
+        }
+    }, [authLoading, loadAnalytics]);
 
     useEffect(() => {
         const handler = () => loadAnalytics();
@@ -182,7 +185,7 @@ export default function AnalyticsPage() {
         entertainment: CHART_COLORS[4],
     };
 
-    if (loading) {
+    if (authLoading || loading) {
         return (
             <div className="analytics-page" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '40vh' }}>
                 <div className="loading-spinner" />

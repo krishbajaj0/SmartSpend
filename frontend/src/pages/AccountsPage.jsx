@@ -10,7 +10,7 @@ import { useToast } from '../context/ToastContext';
 import './AccountsPage.css';
 
 export default function AccountsPage() {
-    const { user } = useAuth();
+    const { user, loading: authLoading } = useAuth();
     const currency = user?.currency || 'INR';
     const { addToast } = useToast();
     
@@ -34,8 +34,8 @@ export default function AccountsPage() {
     }, [addToast]);
 
     useEffect(() => {
-        fetchAccounts();
-    }, [fetchAccounts]);
+        if (!authLoading) fetchAccounts();
+    }, [authLoading, fetchAccounts]);
 
     useEffect(() => {
         const handler = () => fetchAccounts();
@@ -91,7 +91,7 @@ export default function AccountsPage() {
         return '#ef4444'; // Red
     }
 
-    if (loading) {
+    if (authLoading || loading) {
         return (
             <div className="accounts-page loading">
                 <div className="loading-spinner" />
