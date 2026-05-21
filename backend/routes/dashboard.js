@@ -50,8 +50,8 @@ router.get('/', async (req, res, next) => {
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
         // Four queries run in parallel — using $facet for the aggregations
-        const [recentExpenses, budgets, accounts, facetData] = await Promise.all([
-            // Recent activities from the ledger
+        const [recentExpenses, budgets, accounts, facetData, totalTxCount] = await Promise.all([
+            // Recent activities from the ledger (last 30 days)
             Transaction.find({ userId, ...ACTIVE_TRANSACTION_FILTER, date: { $gte: thirtyDaysAgo } })
                 .sort({ date: -1 })
                 .limit(50)
@@ -104,7 +104,12 @@ router.get('/', async (req, res, next) => {
             ])
             .allowDiskUse(false)
             .option({ maxTimeMS: QUERY_TIMEOUT }),
+
+            // Total count of ALL transactions (not just recent) to detect first-time empty state
+            Transaction.countDocuments({ userId, ...ACTIVE_TRANSACTION_FILTER, type: 'EXPENSE' })
+                .maxTimeMS(QUERY_TIMEOUT),
         ]);
+
 
         const summaryFacet = facetData[0].summary[0] || { totalSpent: 0, totalTransactions: 0, avgAmount: 0 };
         const categoryBreakdown = facetData[0].categoryBreakdown || [];
@@ -163,7 +168,9 @@ router.get('/', async (req, res, next) => {
                 amount:   b.amount,
                 count:    b.count,
             })),
+            totalExpenseCount: totalTxCount,
         };
+
 
         // Cache dashboard for 30s
         setCache(cacheKey, responseData, 30);

@@ -106,6 +106,7 @@ export default function DashboardPage() {
     const [loading, setLoading] = useState(true);
     const [aiFilters, setAiFilters] = useState(null);
     const [degradedWarning, setDegradedWarning] = useState(false);
+    const [totalExpenseCount, setTotalExpenseCount] = useState(null);
 
     /* ── Single API call — dashboard endpoint has everything ── */
     const loadDashboard = useCallback(async () => {
@@ -137,6 +138,8 @@ export default function DashboardPage() {
                 name: normalizeCategory(b.category),
                 value: b.amount || 0,
             })));
+            // Use total count (not just last-30-day count) to drive isEmpty
+            setTotalExpenseCount(data.totalExpenseCount ?? data.recentTransactions?.length ?? 0);
         } catch (err) {
             console.error("Dashboard load failed:", err);
         }
@@ -204,7 +207,8 @@ export default function DashboardPage() {
         { label: 'Activity', value: summary.totalTransactions || 0, prefix: '', icon: CreditCard, color: '#14b8a6' },
     ], [summary, netWorth, overallBudgetLimit, sym]);
 
-    const isEmpty = recentTransactions.length === 0 && !loading;
+    // isEmpty = truly no expenses at all (not just no recent ones)
+    const isEmpty = totalExpenseCount === 0 && !loading;
 
     /* ── Render ────────────────────────────────────────────── */
 
