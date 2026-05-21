@@ -373,34 +373,47 @@ export async function getHeatmap(req, res, next) {
 
 // GET /api/analytics/category-over-time
 // BEFORE: full collection scan.
-// AFTER:  capped to last 12 months.
+// AFTER:  capped to last 6 months, returns pivoted chart-ready data.
 export async function getCategoryOverTime(req, res, next) {
     const cacheKey = `analytics_category_over_time_${req.user._id}`;
     const cached = getCache(cacheKey);
     if (cached && !cached.isStale) return res.json(cached.data);
 
     try {
-        const twelveMonthsAgo = new Date();
-        twelveMonthsAgo.setFullYear(twelveMonthsAgo.getFullYear() - 1);
+        const sixMonthsAgo = new Date();
+        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
         const data = await Transaction.aggregate([
             {
                 $match: {
                     userId:    new mongoose.Types.ObjectId(req.user._id),
                     type: 'EXPENSE', ...ACTIVE_TRANSACTION_FILTER,
-                    date:      { $gte: twelveMonthsAgo },   // ← was unbounded
+                    date:      { $gte: sixMonthsAgo },
                 },
             },
             {
                 $group: {
-                    _id:   { month: { $month: '$date' }, year: { $year: '$date' }, category: '$category' },
+                    _id:   { month: { $month: '$date' }, year: { $year: '$date' }, category: { $toLower: '$category' } },
                     total: { $sum: '$amount' },
                 },
             },
             { $sort: { '_id.year': 1, '_id.month': 1 } },
-        ]).option({ maxTimeMS: QUERY_TIMEOUT });
+        ]).option({ maxTimeMS: 8_000 });
 
-        const responseData = { success: true, data };
+        // Pivot into chart-ready format: [{ month: "Jan '25", food: 1234, bills: 567, ... }]
+        const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const monthMap = {};
+
+        for (const row of data) {
+            const { month, year, category } = row._id;
+            const label = `${MONTH_NAMES[month - 1]} '${String(year).slice(2)}`;
+            if (!monthMap[label]) monthMap[label] = { month: label };
+            monthMap[label][category] = Math.round(row.total);
+        }
+
+        const pivoted = Object.values(monthMap);
+
+        const responseData = { success: true, data: pivoted };
         setCache(cacheKey, responseData);
         res.json(responseData);
     } catch (err) {
