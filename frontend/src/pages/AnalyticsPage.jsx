@@ -62,17 +62,6 @@ export default function AnalyticsPage() {
             if (results.some(r => r.status === 'rejected' && r.reason?.response?.status === 503)) {
                 addToast('System is busy. Showing partial data.', { type: 'error' });
             }
-
-            console.log('Analytics API Results:', { compRes, topRes, catTimeRes, heatmapRes });
-            console.log('heatmapRes status:', heatmapRes.status);
-            if (heatmapRes.status === 'fulfilled') {
-                console.log('heatmapRes value:', heatmapRes.value);
-                console.log('heatmapRes value.data:', heatmapRes.value?.data);
-            } else {
-                console.log('heatmapRes reason:', heatmapRes.reason);
-            }
-
-
             if (compRes.status === 'fulfilled') {
                 const comp = compRes.value.data.comparison || [];
                 setComparisonData(comp.map(c => {
@@ -95,7 +84,6 @@ export default function AnalyticsPage() {
 
             if (heatmapRes.status === 'fulfilled') {
                 const heatmap = heatmapRes.value.data.heatmap || {};
-                console.log('Setting heatmapData state to:', heatmap);
                 setHeatmapData(heatmap);
             }
         } catch (err) {
