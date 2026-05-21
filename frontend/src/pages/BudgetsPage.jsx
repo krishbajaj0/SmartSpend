@@ -172,7 +172,7 @@ export default function BudgetsPage() {
         try {
             await budgetsAPI.createOrUpdate({
                 category,
-                limitAmount: isOverall ? 1 : Number(newBudget.limitAmount),
+                limitAmount: isOverall ? undefined : Number(newBudget.limitAmount),
                 warningThreshold: 75,
                 criticalThreshold: 90
             });
@@ -320,7 +320,7 @@ export default function BudgetsPage() {
                                                 type="range"
                                                 className="budget-slider"
                                                 min="500"
-                                                max="20000"
+                                                max={Math.max(20000, Math.ceil((b.limit || 0) / 5000) * 5000)}
                                                 step="500"
                                                 value={b.limit || 0}
                                                 onChange={e => updateBudgetLimit(b.category, e.target.value)}

@@ -34,6 +34,7 @@ export function normalizeCategory(category) {
     if (trimmed === 'subscriptions') return 'subscriptions';
     if (trimmed === 'travel') return 'travel';
     if (trimmed === 'other') return 'other';
+    if (trimmed === 'overall') return 'overall';
 
     // Substring / Aliases match
     for (const [standardCat, aliases] of Object.entries(CATEGORY_ALIASES)) {
