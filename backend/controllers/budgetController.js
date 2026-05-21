@@ -42,6 +42,7 @@ export async function getBudgets(req, res, next) {
     try {
         const now        = new Date();
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
         const [budgets, spending, accounts] = await Promise.all([
             Budget.find({ userId: req.user._id, isActive: true }).lean().maxTimeMS(QUERY_TIMEOUT),
@@ -50,7 +51,7 @@ export async function getBudgets(req, res, next) {
                     $match: {
                         userId:    req.user._id,
                         type: 'EXPENSE', ...ACTIVE_TRANSACTION_FILTER,
-                        date:      { $gte: monthStart, $lte: now },
+                        date:      { $gte: monthStart, $lt: nextMonthStart },
                     },
                 },
                 {

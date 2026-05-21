@@ -164,7 +164,6 @@ export async function getComparison(req, res, next) {
         const now       = new Date();
         const thisStart = new Date(now.getFullYear(), now.getMonth(), 1);
         const lastStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        const lastEnd   = new Date(now.getFullYear(), now.getMonth(), 0);
 
         const [thisMonth, lastMonth] = await Promise.all([
             Transaction.aggregate([
@@ -172,7 +171,7 @@ export async function getComparison(req, res, next) {
                 { $group: { _id: '$category', total: { $sum: '$amount' } } },
             ]).option({ maxTimeMS: QUERY_TIMEOUT }),
             Transaction.aggregate([
-                { $match: { userId: new mongoose.Types.ObjectId(req.user._id), type: 'EXPENSE', ...ACTIVE_TRANSACTION_FILTER, date: { $gte: lastStart, $lte: lastEnd } } },
+                { $match: { userId: new mongoose.Types.ObjectId(req.user._id), type: 'EXPENSE', ...ACTIVE_TRANSACTION_FILTER, date: { $gte: lastStart, $lt: thisStart } } },
                 { $group: { _id: '$category', total: { $sum: '$amount' } } },
             ]).option({ maxTimeMS: QUERY_TIMEOUT }),
         ]);
@@ -437,7 +436,11 @@ export async function exportData(req, res, next) {
         if (dateFrom || dateTo) {
             filter.date = {};
             if (dateFrom) filter.date.$gte = new Date(dateFrom);
-            if (dateTo)   filter.date.$lte = new Date(dateTo);
+            if (dateTo) {
+                const dTo = new Date(dateTo);
+                dTo.setHours(23, 59, 59, 999);
+                filter.date.$lte = dTo;
+            }
         }
 
         // Helper: should we abort the current streaming loop?

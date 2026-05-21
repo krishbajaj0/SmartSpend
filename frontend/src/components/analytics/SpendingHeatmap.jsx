@@ -8,7 +8,7 @@ const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 export default function SpendingHeatmap({ expenses = [], heatmapData = null, days = 180, currency = 'INR' }) {
     const [tooltip, setTooltip] = useState(null);
 
-    const { weeks, maxSpend, months, thresholds } = useMemo(() => {
+    const { weeks, months, thresholds } = useMemo(() => {
         // ── Build daily spend map ──────────────────────────────────────────
         // The backend returns keys as UTC date strings (e.g. "2026-05-20").
         // We use local-date keys everywhere to avoid a timezone day-shift bug

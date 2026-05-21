@@ -185,13 +185,13 @@ export function initCronJobs() {
             const lastMonth = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
             const lastYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
             const lastStart = new Date(lastYear, lastMonth, 1);
-            const lastEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+            const thisStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
             const budgets = await Budget.find({ isActive: true }).lean();
 
             // Single aggregation: get totals per (userId, category) for last month
             const spendAgg = await Transaction.aggregate([
-        { $match: { type: 'EXPENSE', ...ACTIVE_TRANSACTION_FILTER,  ...ACTIVE_TRANSACTION_FILTER, date: { $gte: lastStart, $lte: lastEnd } } },
+        { $match: { type: 'EXPENSE', ...ACTIVE_TRANSACTION_FILTER,  ...ACTIVE_TRANSACTION_FILTER, date: { $gte: lastStart, $lt: thisStart } } },
                 { $group: {
                     _id: { userId: '$userId', category: '$category' },
                     total: { $sum: { $ifNull: ['$baseAmount', '$amount'] } },

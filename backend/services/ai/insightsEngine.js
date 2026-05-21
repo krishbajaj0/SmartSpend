@@ -11,11 +11,10 @@ export async function generateInsights(userId) {
     const now = new Date();
     const thisStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const lastStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const lastEnd = new Date(now.getFullYear(), now.getMonth(), 0);
 
     const [thisMonth, lastMonth] = await Promise.all([
         Transaction.find({ type: 'EXPENSE', ...ACTIVE_TRANSACTION_FILTER,  userId, ...ACTIVE_TRANSACTION_FILTER, date: { $gte: thisStart } }),
-        Transaction.find({ type: 'EXPENSE', ...ACTIVE_TRANSACTION_FILTER,  userId, ...ACTIVE_TRANSACTION_FILTER, date: { $gte: lastStart, $lte: lastEnd } }),
+        Transaction.find({ type: 'EXPENSE', ...ACTIVE_TRANSACTION_FILTER,  userId, ...ACTIVE_TRANSACTION_FILTER, date: { $gte: lastStart, $lt: thisStart } }),
     ]);
 
     const thisTotal = thisMonth.reduce((s, e) => s + (e.baseAmount || e.amount), 0);

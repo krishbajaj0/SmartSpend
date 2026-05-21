@@ -146,7 +146,11 @@ export async function getExpenses(req, res, next) {
         if (dateFrom || dateTo) {
             filter.date = {};
             if (dateFrom) filter.date.$gte = new Date(dateFrom);
-            if (dateTo) filter.date.$lte = new Date(dateTo);
+            if (dateTo) {
+                const dTo = new Date(dateTo);
+                dTo.setHours(23, 59, 59, 999);
+                filter.date.$lte = dTo;
+            }
         }
         if (amountMin || amountMax) {
             filter.amount = {};

@@ -47,13 +47,8 @@ router.get('/', async (req, res, next) => {
 
     const fetchDashboard = async () => {
         const now           = new Date();
-        // Use end-of-day UTC+14 (max timezone offset) to include today's expenses
-        // from all timezones. Without this, users in UTC+ timezones (e.g. IST)
-        // adding expenses for "today" get dates in the UTC future (e.g. midnight UTC
-        // of the next day), which $lte:now would exclude.
-        const endOfToday    = new Date(now);
-        endOfToday.setUTCHours(23, 59, 59, 999);
         const startOfMonth  = new Date(now.getFullYear(), now.getMonth(), 1);
+        const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
         const thirtyDaysAgo = new Date(now);
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
@@ -82,7 +77,7 @@ router.get('/', async (req, res, next) => {
                     $match: {
                         userId: new mongoose.Types.ObjectId(userId),
                         type: 'EXPENSE', ...ACTIVE_TRANSACTION_FILTER,
-                        date: { $gte: startOfMonth, $lte: endOfToday },
+                        date: { $gte: startOfMonth, $lt: nextMonthStart },
                     },
                 },
                 {
