@@ -109,10 +109,10 @@ export default function DashboardPage() {
     const [totalExpenseCount, setTotalExpenseCount] = useState(null);
 
     /* ── Single API call — dashboard endpoint has everything ── */
-    const loadDashboard = useCallback(async () => {
+    const loadDashboard = useCallback(async (opts = {}) => {
         setLoading(true);
         try {
-            const { data } = await dashboardAPI.load();
+            const { data } = await dashboardAPI.load(opts);
 
             // Surface degraded (stale cache) state to the user
             if (data.degraded) {
@@ -151,7 +151,8 @@ export default function DashboardPage() {
     }, [authLoading, loadDashboard]);
 
     useEffect(() => {
-        const handler = () => loadDashboard();
+        // Force cache bypass after any write so new data is always fresh
+        const handler = () => loadDashboard({ noCache: true });
         window.addEventListener('expenseUpdated', handler);
         return () => window.removeEventListener('expenseUpdated', handler);
     }, [loadDashboard]);

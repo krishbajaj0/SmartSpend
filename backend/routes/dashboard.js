@@ -28,7 +28,9 @@ import { ACTIVE_TRANSACTION_FILTER } from '../config/constants.js';
 router.get('/', async (req, res, next) => {
     const userId = req.user._id;
     const cacheKey = `dashboard_${userId}`;
-    const cached = getCache(cacheKey);
+    // If client sends _t (cache-bust timestamp), skip cache entirely for fresh data
+    const skipCache = !!req.query._t;
+    const cached = !skipCache ? getCache(cacheKey) : null;
     
     if (cached && !cached.isStale) {
         return res.json(cached.data);

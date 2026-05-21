@@ -181,7 +181,7 @@ export const notificationsAPI = {
 
 // ── Dashboard (consolidated) ──
 export const dashboardAPI = {
-    load: () => api.get('/dashboard'),
+    load: (opts = {}) => api.get('/dashboard', opts.noCache ? { params: { _t: Date.now() } } : {}),
 };
 
 // ── Accounts ──
