@@ -179,12 +179,14 @@ export default function DashboardPage() {
 
     const trendData = useMemo(() => {
         const now = new Date();
+        const endOfToday = new Date(now);
+        endOfToday.setHours(23, 59, 59, 999);
         const from = subDays(now, trendDays);
         const dayMap = {};
         recentTransactions.forEach(e => {
             if (!e.date || e.type !== 'EXPENSE') return;
             const d = new Date(e.date);
-            if (d >= from && d <= now) {
+            if (d >= from && d <= endOfToday) {
                 const key = format(d, 'yyyy-MM-dd');
                 dayMap[key] = (dayMap[key] || 0) + (e.amount || 0);
             }
