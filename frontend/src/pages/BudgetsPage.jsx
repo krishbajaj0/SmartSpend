@@ -202,7 +202,7 @@ export default function BudgetsPage() {
 
     return (
         <div className="budgets-page">
-            <div className="receipts-page-header">
+            <div className="budgets-page-header">
                 <h1>{tab === 'budgets' ? 'Budget Setup' : 'Savings Goals'}</h1>
                 {tab === 'goals' && (
                     <Button variant="primary" icon={<Plus size={18} />} onClick={() => setAddGoalOpen(true)}>
@@ -263,27 +263,29 @@ export default function BudgetsPage() {
                             const cat = CATEGORIES.overall || { label: 'Overall Month Limit', icon: '🏛️', color: '#ff7675' };
                             return (
                                 <motion.div key="overall_hero" variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0 } }} style={{ gridColumn: '1 / -1', marginBottom: '16px' }}>
-                                    <GlassCard className="budget-card-item" style={{ border: '1px solid var(--border-accent)', background: 'linear-gradient(135deg, rgba(255,118,117,0.1), rgba(0,0,0,0.3))' }}>
-                                        <div className="budget-card-header">
-                                            <div className="budget-card-category">
-                                                <div className="budget-card-cat-icon" style={{ background: `${cat.color}20` }}>
+                                    <GlassCard className="budget-card-item" style={{ border: '1px solid var(--border-accent)', background: 'linear-gradient(135deg, rgba(255,118,117,0.08), rgba(0,0,0,0.3))' }}>
+                                        <div className="overall-budget-hero">
+                                            <div className="overall-budget-hero-left">
+                                                <div className="budget-card-cat-icon" style={{ width: 44, height: 44, background: `${cat.color}20`, fontSize: '1.4rem' }}>
                                                     {cat.icon}
                                                 </div>
-                                                <span className="budget-card-cat-name" style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{cat.label}</span>
+                                                <div>
+                                                    <div style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--text-primary)' }}>{cat.label}</div>
+                                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: 2 }}>Master spending limit</div>
+                                                </div>
                                             </div>
-                                            <span className="budget-card-amounts">
-                                                <strong>{formatCurrency(b.spent || 0, currency)}</strong> / {formatCurrency(b.limit || 0, currency)}
-                                            </span>
+                                            <div className="overall-budget-hero-right">
+                                                <div className="hero-amounts">
+                                                    {formatCurrency(b.spent || 0, currency)}
+                                                    <span> / {formatCurrency(b.limit || 0, currency)}</span>
+                                                </div>
+                                                <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>spent this month</div>
+                                            </div>
                                         </div>
                                         <ProgressBar value={b.spent || 0} max={b.limit || 1} showPercentage size="md" />
-                                        <div className="budget-slider-wrapper" style={{ marginTop: 'var(--space-md)' }}>
-                                            <div className="budget-slider-label">
-                                                <span>Linked to Account Balances</span>
-                                                <span style={{ fontSize: '0.8rem', opacity: 0.7 }}>(Auto-updates)</span>
-                                            </div>
-                                            <p style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', marginTop: '4px' }}>
-                                                Your master spending limit is automatically set to your total available funds (Net Worth).
-                                            </p>
+                                        <div className="overall-budget-footer">
+                                            <p>🔗 Linked to Account Balances — auto-updates with your net worth</p>
+                                            <span className="overall-budget-tag">(Auto-updates)</span>
                                         </div>
                                     </GlassCard>
                                 </motion.div>
@@ -306,9 +308,10 @@ export default function BudgetsPage() {
                                                 </div>
                                                 <span className="budget-card-cat-name">{cat.label}</span>
                                             </div>
-                                            <span className="budget-card-amounts">
-                                                <strong>{formatCurrency(b.spent || 0, currency)}</strong> / {formatCurrency(b.limit || 0, currency)}
-                                            </span>
+                                            <div className="budget-card-amounts">
+                                                <strong>{formatCurrency(b.spent || 0, currency)}</strong>
+                                                <span>of {formatCurrency(b.limit || 0, currency)}</span>
+                                            </div>
                                         </div>
                                         <ProgressBar value={b.spent || 0} max={b.limit || 1} showPercentage size="sm" />
                                         <div className="budget-slider-wrapper">
