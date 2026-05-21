@@ -59,6 +59,9 @@ export async function seedDemoData(forceReset = false) {
         // If forceReset is true and user exists, clean all associated records
         if (user) {
             logger.info(`Cleaning old records for existing user: ${user.email}…`);
+            // Clear avatar on reset
+            user.avatar = '';
+            await user.save();
             await Promise.all([
                 Account.deleteMany({ userId: user._id }),
                 Transaction.deleteMany({ userId: user._id }),
@@ -77,7 +80,7 @@ export async function seedDemoData(forceReset = false) {
                 name: 'Alex Johnson',
                 email: DEMO_EMAIL,
                 passwordHash,
-                avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
+                avatar: '',
                 avatarProvider: 'local',
                 provider: 'local',
                 providers: ['local'],

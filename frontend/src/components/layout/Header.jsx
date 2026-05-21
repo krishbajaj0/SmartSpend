@@ -62,9 +62,7 @@ export default function Header() {
                 <span className="text-sm text-gray-500 font-medium border-l border-white/10 pl-6" style={{ transform: 'translateY(1px)' }}>
                     {format(new Date(), 'EEEE, MMMM d, yyyy')}
                 </span>
-                <span className="header-ai-insight" style={{ fontSize: '0.8125rem', color: 'rgba(255, 255, 255, 0.55)', fontWeight: '500', paddingLeft: '24px', borderLeft: '1px solid rgba(255, 255, 255, 0.05)', display: 'flex', alignItems: 'center', gap: '6px', transform: 'translateY(1px)', opacity: 0.72 }}>
-                    <span style={{ fontSize: '14px', opacity: 0.7 }}>✨</span> You spent 18% less than yesterday.
-                </span>
+
                 <div style={{ background: 'rgba(20, 184, 166, 0.04)', border: '1px solid rgba(20, 184, 166, 0.15)', fontSize: '0.65rem', color: 'rgba(20, 184, 166, 0.8)', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em', height: '22px', display: 'flex', alignItems: 'center', gap: '6px', padding: '0 8px', borderRadius: '12px', transform: 'translateY(1px)' }}>
                     <span className="live-pulse-dot" />
                     <span>Live Syncing</span>
