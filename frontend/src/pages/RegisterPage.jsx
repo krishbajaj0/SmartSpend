@@ -124,7 +124,7 @@ export default function RegisterPage() {
                         <span className="text-gradient">SmartSpend</span>
                     </h1>
                     <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '0.75rem', lineHeight: '1.5', padding: '0 1rem' }}>
-                        An expense management platform with intelligent categorization, budget alerts, receipt handling, and analytics.
+                        Spend smarter. Save better. Stay in control.
                     </p>
                 </div>
                 <div className="auth-form-header" style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
