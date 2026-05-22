@@ -81,24 +81,36 @@ function preprocess(text) {
 
 // ── Amount extraction ──
 function extractAmount(text) {
-    const patterns = [
-        /(?:total|grand total|amount due|net amount|net total|payable|paid|card)[:\s]*₹?\s*([\d,]+\.?\d*)/i,
-        /₹\s*([\d,]+\.?\d*)/,
-        /(?:rs\.?|inr)\s*([\d,]+\.?\d*)/i,
-        /TOTAL[:\s]*([\d,]+\.?\d*)/,
+    // 1. High-confidence patterns (require a total-related keyword, and support ₹, Rs, Rs., INR)
+    const keywordPatterns = [
+        /(?:total|grand total|amount due|net amount|net total|payable|paid|card)[:\s]*(?:₹|rs\.?|inr)?\s*([\d,]+\.?\d*)/i,
+        /TOTAL[:\s]*(?:₹|rs\.?|inr)?\s*([\d,]+\.?\d*)/i
     ];
 
-    for (const pattern of patterns) {
+    for (const pattern of keywordPatterns) {
         const match = text.match(pattern);
         if (match) {
             const value = parseFloat(match[1].replace(/,/g, ''));
             if (!isNaN(value) && value > 0) {
-                return { value, confidence: 0.9 };
+                return { value, confidence: 0.95 };
             }
         }
     }
 
-    // Fallback: find highest number that isn't a date or year
+    // 2. Medium-confidence patterns (general currency match, parsed bottom-up to target the total line)
+    const lines = text.split('\n');
+    const currencyPattern = /(?:₹|rs\.?|inr)\s*([\d,]+\.?\d*)/i;
+    for (let i = lines.length - 1; i >= 0; i--) {
+        const match = lines[i].match(currencyPattern);
+        if (match) {
+            const value = parseFloat(match[1].replace(/,/g, ''));
+            if (!isNaN(value) && value > 0) {
+                return { value, confidence: 0.75 };
+            }
+        }
+    }
+
+    // 3. Fallback: find highest number that isn't a date or year
     const numbers = text.match(/\b\d[\d,]*\.?\d*\b/g) || [];
     const parsed = numbers
         .map(n => parseFloat(n.replace(/,/g, '')))
@@ -106,7 +118,7 @@ function extractAmount(text) {
     
     const max = Math.max(...parsed);
     if (max > 0 && isFinite(max)) {
-        return { value: max, confidence: 0.5 };
+        return { value: max, confidence: 0.6 };
     }
 
     return { value: 0, confidence: 0 };
@@ -159,7 +171,10 @@ function extractMerchant(text) {
         // Skip summary lines
         if (/total|amount|tax|receipt|date|invoice/i.test(line)) continue;
 
-        const score = letters - symbols;
+        // Apply a score penalty to generic lines (delivery, service, cashier, copy) to favor brand/merchant names
+        const isGeneric = /delivery|service|welcome|customer|copy|cashier|phone|tel|terminal/i.test(line);
+        const score = letters - symbols - (isGeneric ? 12 : 0);
+        
         if (score > bestCandidate.score) {
             bestCandidate = { value: line, score };
         }

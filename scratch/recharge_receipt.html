@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jio Recharge Receipt</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400;1,700&family=Outfit:wght@300;400;600;700&display=swap');
+
+        :root {
+            --bg-color: #121214;
+            --receipt-bg: #ffffff;
+            --text-primary: #1c1e21;
+            --text-secondary: #606770;
+            --jio-blue: #0a2885;
+            --border-color: #ebedf0;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 40px 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            color: #ffffff;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            max-width: 420px;
+            width: 100%;
+        }
+
+        .receipt-card {
+            background-color: var(--receipt-bg);
+            color: var(--text-primary);
+            width: 100%;
+            border-radius: 20px;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.4);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .receipt-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 8px;
+            background: linear-gradient(90deg, #0f3db5, #0a2885);
+        }
+
+        .receipt-content {
+            padding: 35px 30px;
+            font-family: 'Courier Prime', 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 25px;
+            border-bottom: 2px dashed var(--border-color);
+            padding-bottom: 20px;
+        }
+
+        .logo-text {
+            font-family: 'Outfit', sans-serif;
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--jio-blue);
+            letter-spacing: 0.5px;
+            margin-bottom: 5px;
+        }
+
+        .subtitle {
+            font-size: 11px;
+            color: var(--text-secondary);
+            font-weight: bold;
+            margin-bottom: 5px;
+            letter-spacing: 0.5px;
+        }
+
+        .meta-info {
+            margin: 20px 0;
+            font-size: 13px;
+        }
+
+        .meta-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 6px;
+        }
+
+        .divider {
+            border-top: 1px dashed var(--border-color);
+            margin: 15px 0;
+        }
+
+        .recharge-info {
+            background-color: rgba(10, 40, 133, 0.04);
+            border: 1px dashed rgba(10, 40, 133, 0.15);
+            border-radius: 10px;
+            padding: 15px;
+            margin: 15px 0;
+            font-size: 13px;
+        }
+
+        .recharge-title {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 700;
+            color: var(--jio-blue);
+            text-align: center;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            font-size: 14px;
+            letter-spacing: 0.5px;
+        }
+
+        .items-table {
+            width: 100%;
+            margin: 20px 0;
+            border-collapse: collapse;
+        }
+
+        .items-table th {
+            text-align: left;
+            border-bottom: 1px solid var(--text-primary);
+            padding-bottom: 8px;
+            font-weight: bold;
+        }
+
+        .items-table td {
+            padding: 8px 0;
+        }
+
+        .items-table .amount-col {
+            text-align: right;
+        }
+
+        .totals-section {
+            margin-top: 15px;
+            border-top: 2px dashed var(--border-color);
+            padding-top: 15px;
+        }
+
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 18px;
+            font-weight: 700;
+            color: #000;
+            margin-bottom: 8px;
+        }
+
+        .barcode-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 30px;
+            margin-bottom: 10px;
+        }
+
+        .barcode {
+            width: 80%;
+            height: 40px;
+            background: repeating-linear-gradient(
+                90deg,
+                #000,
+                #000 2px,
+                transparent 2px,
+                transparent 6px,
+                #000 6px,
+                #000 7px,
+                transparent 7px,
+                transparent 9px,
+                #000 9px,
+                #000 11px,
+                transparent 11px,
+                transparent 14px,
+                #000 14px,
+                #000 16px,
+                transparent 16px,
+                transparent 20px
+            );
+            opacity: 0.9;
+        }
+
+        .barcode-num {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-top: 8px;
+            letter-spacing: 3px;
+        }
+
+        .footer-note {
+            text-align: center;
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-top: 20px;
+            text-transform: uppercase;
+        }
+
+        .btn-download {
+            margin-top: 25px;
+            background: linear-gradient(135deg, #0f3db5 0%, #0a2885 100%);
+            color: #fff;
+            border: none;
+            padding: 12px 24px;
+            font-size: 15px;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(10, 40, 133, 0.4);
+            transition: all 0.2s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-family: 'Outfit', sans-serif;
+        }
+
+        .btn-download:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(10, 40, 133, 0.6);
+        }
+
+        .btn-download:active {
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="receipt-card" id="receipt">
+            <div class="receipt-content">
+                <div class="header">
+                    <div class="logo-text">JIO RECHARGE</div>
+                    <div class="subtitle">RELIABLE MOBILE NETWORK</div>
+                    <div class="subtitle">GSTIN: 27BBBBB2222B2Z2</div>
+                </div>
+
+                <div class="meta-info">
+                    <div class="meta-row">
+                        <span>Transaction ID:</span>
+                        <span>TXN-8472910382</span>
+                    </div>
+                    <div class="meta-row">
+                        <span>Date:</span>
+                        <span>22 May 2026</span>
+                    </div>
+                    <div class="meta-row">
+                        <span>Time:</span>
+                        <span>04:42 PM</span>
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+
+                <div class="recharge-info">
+                    <div class="recharge-title">RECHARGE SUMMARY</div>
+                    <div class="meta-row">
+                        <span>Mobile Number:</span>
+                        <span>+91 98765 43210</span>
+                    </div>
+                    <div class="meta-row">
+                        <span>Operator:</span>
+                        <span>Jio Prepaid (IN)</span>
+                    </div>
+                    <div class="meta-row">
+                        <span>Validity:</span>
+                        <span>84 Days (1.5 GB/Day)</span>
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+
+                <table class="items-table">
+                    <thead>
+                        <tr>
+                            <th>Description</th>
+                            <th class="amount-col">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Jio Prepaid Plan 749</td>
+                            <td class="amount-col">749.00</td>
+                        </tr>
+                        <tr>
+                            <td>Processing Fee</td>
+                            <td class="amount-col">2.00</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="totals-section">
+                    <div class="total-row">
+                        <span>TOTAL:</span>
+                        <span>Rs. 751.00</span>
+                    </div>
+                    <div class="meta-row" style="font-size: 12px; color: var(--text-secondary);">
+                        <span>Payment Mode:</span>
+                        <span>UPI (Google Pay)</span>
+                    </div>
+                </div>
+
+                <div class="barcode-container">
+                    <div class="barcode"></div>
+                    <div class="barcode-num">*8472910382*</div>
+                </div>
+
+                <div class="footer-note">
+                    Thank you for choosing Jio!<br>
+                    Together with you, digital life is simple.
+                </div>
+            </div>
+        </div>
+
+        <button class="btn-download" onclick="window.print()">
+            Print / Save Receipt
+        </button>
+    </div>
+
+</body>
+</html>

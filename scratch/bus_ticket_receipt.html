@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bus Ticket Receipt - Intercity Express</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400;1,700&family=Outfit:wght@300;400;600;700&display=swap');
+
+        :root {
+            --bg-color: #121214;
+            --receipt-bg: #f9f9fb;
+            --text-primary: #1e2022;
+            --text-secondary: #5a5f66;
+            --accent: #2e7d32;
+            --border-color: #e2e5e9;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 40px 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            color: #ffffff;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            max-width: 420px;
+            width: 100%;
+        }
+
+        .receipt-card {
+            background-color: var(--receipt-bg);
+            color: var(--text-primary);
+            width: 100%;
+            border-radius: 16px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), 0 0 1px rgba(255, 255, 255, 0.1);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        /* Thermal Receipt Paper Effect */
+        .receipt-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 6px;
+            background: linear-gradient(135deg, transparent 33.33%, var(--bg-color) 33.33%, var(--bg-color) 66.66%, transparent 66.66%),
+                        linear-gradient(45deg, transparent 33.33%, var(--bg-color) 33.33%, var(--bg-color) 66.66%, transparent 66.66%);
+            background-size: 12px 24px;
+            background-position: 0 -18px;
+        }
+
+        .receipt-card::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 6px;
+            background: linear-gradient(135deg, transparent 33.33%, var(--receipt-bg) 33.33%, var(--receipt-bg) 66.66%, transparent 66.66%),
+                        linear-gradient(45deg, transparent 33.33%, var(--receipt-bg) 33.33%, var(--receipt-bg) 66.66%, transparent 66.66%);
+            background-size: 12px 24px;
+            background-position: 0 0;
+            transform: rotate(180deg);
+        }
+
+        .receipt-content {
+            padding: 35px 30px;
+            font-family: 'Courier Prime', 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            letter-spacing: -0.2px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 25px;
+            border-bottom: 2px dashed var(--border-color);
+            padding-bottom: 20px;
+        }
+
+        .logo-text {
+            font-size: 20px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #111;
+            margin-bottom: 5px;
+        }
+
+        .subtitle {
+            font-size: 11px;
+            color: var(--text-secondary);
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .meta-info {
+            margin: 20px 0;
+            font-size: 13px;
+        }
+
+        .meta-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 6px;
+        }
+
+        .divider {
+            border-top: 1px dashed var(--border-color);
+            margin: 15px 0;
+        }
+
+        .ticket-info {
+            background-color: rgba(0, 0, 0, 0.03);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            border-radius: 8px;
+            padding: 12px;
+            margin: 15px 0;
+            font-size: 13px;
+        }
+
+        .ticket-title {
+            font-weight: bold;
+            color: var(--accent);
+            text-align: center;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            font-size: 14px;
+            letter-spacing: 0.5px;
+        }
+
+        .items-table {
+            width: 100%;
+            margin: 20px 0;
+            border-collapse: collapse;
+        }
+
+        .items-table th {
+            text-align: left;
+            border-bottom: 1px solid var(--text-primary);
+            padding-bottom: 8px;
+            font-weight: bold;
+        }
+
+        .items-table td {
+            padding: 8px 0;
+        }
+
+        .items-table .amount-col {
+            text-align: right;
+        }
+
+        .totals-section {
+            margin-top: 15px;
+            border-top: 2px dashed var(--border-color);
+            padding-top: 15px;
+        }
+
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 18px;
+            font-weight: 700;
+            color: #000;
+            margin-bottom: 8px;
+        }
+
+        .barcode-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 30px;
+            margin-bottom: 10px;
+        }
+
+        .barcode {
+            width: 80%;
+            height: 45px;
+            background: repeating-linear-gradient(
+                90deg,
+                #000,
+                #000 2px,
+                transparent 2px,
+                transparent 6px,
+                #000 6px,
+                #000 8px,
+                transparent 8px,
+                transparent 10px,
+                #000 10px,
+                #000 11px,
+                transparent 11px,
+                transparent 14px,
+                #000 14px,
+                #000 18px,
+                transparent 18px,
+                transparent 20px
+            );
+            opacity: 0.95;
+        }
+
+        .barcode-num {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-top: 8px;
+            letter-spacing: 3px;
+        }
+
+        .footer-note {
+            text-align: center;
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-top: 20px;
+            text-transform: uppercase;
+        }
+
+        .btn-download {
+            margin-top: 25px;
+            background: linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%);
+            color: #fff;
+            border: none;
+            padding: 12px 24px;
+            font-size: 15px;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(46, 125, 50, 0.4);
+            transition: all 0.2s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-family: 'Outfit', sans-serif;
+        }
+
+        .btn-download:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(46, 125, 50, 0.6);
+        }
+
+        .btn-download:active {
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="receipt-card" id="receipt">
+            <div class="receipt-content">
+                <div class="header">
+                    <div class="logo-text">INTERCITY EXPRESS BUS</div>
+                    <div class="subtitle">FAST & RELIABLE TRAVELS</div>
+                    <div class="subtitle">GSTIN: 27AAAAA1111A1Z1</div>
+                </div>
+
+                <div class="meta-info">
+                    <div class="meta-row">
+                        <span>Ticket No:</span>
+                        <span>TXN-98471203</span>
+                    </div>
+                    <div class="meta-row">
+                        <span>Date:</span>
+                        <span>22-05-2026</span>
+                    </div>
+                    <div class="meta-row">
+                        <span>Time:</span>
+                        <span>08:30 AM</span>
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+
+                <div class="ticket-info">
+                    <div class="ticket-title">BOARDING PASS</div>
+                    <div class="meta-row">
+                        <span>From:</span>
+                        <span>MUMBAI (BCT)</span>
+                    </div>
+                    <div class="meta-row">
+                        <span>To:</span>
+                        <span>PUNE (PND)</span>
+                    </div>
+                    <div class="meta-row">
+                        <span>Seat:</span>
+                        <span>A-12 (WINDOW)</span>
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+
+                <table class="items-table">
+                    <thead>
+                        <tr>
+                            <th>Description</th>
+                            <th class="amount-col">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Bus Ticket Seat A12</td>
+                            <td class="amount-col">400.00</td>
+                        </tr>
+                        <tr>
+                            <td>Booking Fee</td>
+                            <td class="amount-col">50.00</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="totals-section">
+                    <div class="total-row">
+                        <span>TOTAL:</span>
+                        <span>Rs. 450.00</span>
+                    </div>
+                    <div class="meta-row" style="font-size: 12px; color: var(--text-secondary);">
+                        <span>Payment Mode:</span>
+                        <span>UPI / CARD</span>
+                    </div>
+                </div>
+
+                <div class="barcode-container">
+                    <div class="barcode"></div>
+                    <div class="barcode-num">*98471203*</div>
+                </div>
+
+                <div class="footer-note">
+                    Thank you for riding with us!<br>
+                    Have a safe journey.
+                </div>
+            </div>
+        </div>
+
+        <button class="btn-download" onclick="window.print()">
+            Print / Save Receipt
+        </button>
+    </div>
+
+</body>
+</html>
